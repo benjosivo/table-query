@@ -1,14 +1,11 @@
 # @benjosivo/table-query
 
-Table triable/filtrable/paginée : hook + composants React d'un côté (`/react`), logique
-SQL de pagination/tri/filtres côté serveur de l'autre (`/server`). Un projet peut
-n'utiliser qu'un des deux côtés.
+Tableau de données triable, filtrable et paginé, en deux parties indépendantes :
 
-```
-src/
-  react/    → DataTable, Table, Pagination, useDataTable, FilterModal, FilterPanel, Cell, utils, types
-  server/   → createTableQueryModule (router Express + reqTableQuery)
-```
+- **`@benjosivo/table-query/server`** — logique de requêtage côté serveur (Express + MySQL) : pagination, tri, filtres, calcul des valeurs disponibles pour chaque colonne, mise en cache optionnelle.
+- **`@benjosivo/table-query/react`** — composants et hook React pour afficher ce type de données : tableau, pagination, filtre rapide par colonne, panneau de filtres avancés (multiselect / plage numérique / plage de dates).
+
+Les deux parties fonctionnent ensemble mais peuvent aussi être utilisées séparément (par exemple le composant React seul, avec ton propre backend).
 
 ## Installation
 
@@ -16,72 +13,203 @@ src/
 npm install @benjosivo/table-query
 ```
 
-Peer dependencies : `react` (si tu utilises `/react`), `express` et `@benjosivo/mysql`
-(si tu utilises `/server`) — ce sont des `peerDependencies` optionnelles, donc pas
-besoin des trois si tu n'utilises qu'un des deux côtés.
+Selon la partie utilisée, il faut aussi avoir installé dans le projet :
+
+| Partie utilisée | Dépendances nécessaires |
+|---|---|
+| `/server` | `express`, `@benjosivo/mysql` |
+| `/react` | `react` (v18+) |
+
+Ce sont des `peerDependencies` : le package ne les installe pas lui-même, il utilise celles déjà présentes dans ton projet.
+
+---
 
 ## Côté serveur
 
+### Créer le module
+
 ```ts
 import { createTableQueryModule } from '@benjosivo/table-query/server';
-import { convertToMySQLDateTime, wrapRouteHandler } from './functions.js';
-import { getSQLCache, setSQLCache, deleteSQLCache } from './redis.js';
 
 const { router, reqTableQuery } = createTableQueryModule({
-    convertToMySQLDateTime,
-    wrapRouteHandler,
-    // Optionnel : à fournir seulement si tu veux pouvoir utiliser le cache quelque part.
-    cache: { getSQLCache, setSQLCache, deleteSQLCache },
+    // Formate une date/heure au format attendu par MySQL
+    convertToMySQLDateTime: (date) => /* ta fonction */,
+
+    // Enveloppe un handler Express (gestion d'erreurs, etc.)
+    wrapRouteHandler: (fn) => /* ta fonction */,
+
+    // Optionnel : uniquement nécessaire si tu veux pouvoir utiliser le cache (voir plus bas)
+    cache: {
+        getSQLCache: (key) => /* lit une entrée de cache */,
+        setSQLCache: (key, value) => /* écrit une entrée de cache */,
+        deleteSQLCache: (key) => /* supprime une entrée de cache */,
+    },
 });
+```
 
+`router` expose la route `GET /getFiltres`, utilisée en interne pour récupérer les filtres calculés en tâche de fond. Monte-le sur le chemin de ton choix :
+
+```ts
 app.use('/tableCreation/api', router);
+```
 
+### Répondre à une requête de table
+
+```ts
 app.post('/api/commandes', wrapRouteHandler(async (req, res) => {
     const result = await reqTableQuery({
         query: `SELECT c.*, COUNT(*) OVER() AS TotalCount FROM commandes c`,
         req,
+        // Un type de filtre par colonne renvoyée par la requête (sauf la 1ère, l'identifiant)
         paramFilter: ['MULTISELECT', 'HIDE', 'DATE', 'MULTISELECT'],
-        useCache: true, // voir plus bas
     });
+
     if (result.error) return res.status(result.status ?? 500).send(result.error);
     res.json(result.data);
 }));
 ```
 
-### Le paramètre `useCache`
+`reqTableQuery` lit `limit`, `offset`, `sorting`, `filtre` et `setFilter` dans `req.body` (ou `req.query`) — c'est exactement ce que le composant React `DataTable`/`useDataTable` envoie, donc les deux côtés s'emboîtent directement.
 
-`reqTableQuery({ ..., useCache })` :
+### Types de filtre disponibles (`paramFilter`)
 
-- **`useCache: true`** (ou omis, si `cache` a été fourni à `createTableQueryModule`) —
-  comportement d'origine : résultats de requête et filtres mis en cache Redis, filtres
-  calculés en tâche de fond et récupérés via `/getFiltres` (polling).
-- **`useCache: false`** — aucune lecture/écriture Redis, requête toujours fraîche, filtres
-  calculés et renvoyés directement dans la même réponse (pas de round-trip `/getFiltres`).
-  Utile pour un écran qui doit toujours montrer les données à l'instant T, ou pour un
-  projet qui n'a pas (encore) de Redis configuré.
-- Si tu passes `useCache: true` sans avoir fourni `cache` à `createTableQueryModule`,
-  une erreur explicite est levée au lieu d'échouer silencieusement.
+| Type | Effet |
+|---|---|
+| `'MULTISELECT'` | Liste de valeurs distinctes de la colonne, sélection multiple |
+| `'UNGROUP_MULTISELECT'` | Comme `MULTISELECT`, mais éclate les valeurs séparées par `, ` dans une même cellule |
+| `'SLIDER'` | Plage numérique (min/max) |
+| `'DATE'` / `'DATETIME'` | Plage de dates |
+| `'JSON'` / `'FILE'` | Pas de filtre, juste un rendu spécifique côté React |
+| `'HIDE'` | Colonne sans filtre |
+| `null` | Colonne sans filtre particulier |
 
-Le cache est donc décidé **par appel** (`reqTableQuery`), pas globalement pour tout le
-module — tu peux avoir certains endpoints en cache et d'autres non avec le même module.
+### Le cache (`useCache`)
+
+Le cache est activé **par appel**, pas globalement :
+
+```ts
+reqTableQuery({ query, req, paramFilter, useCache: true });  // utilise le cache
+reqTableQuery({ query, req, paramFilter, useCache: false }); // toujours une donnée fraîche
+```
+
+- Si `cache` a été fourni à `createTableQueryModule`, `useCache` vaut `true` par défaut.
+- Si `cache` n'a pas été fourni, `useCache` vaut `false` par défaut (aucun Redis requis).
+- Demander `useCache: true` sans avoir fourni `cache` lève une erreur explicite.
+- Avec `useCache: false`, les valeurs de filtre disponibles sont calculées et renvoyées directement dans la réponse. Avec `useCache: true`, elles sont calculées en tâche de fond et le composant React va les chercher via `/getFiltres` (polling automatique, rien à faire côté appelant).
+
+---
 
 ## Côté React
+
+### Utilisation simple (tout inclus)
 
 ```tsx
 import { DataTable } from '@benjosivo/table-query/react';
 
-<DataTable
-    fetchData={(params) => fetch('/api/commandes', { method: 'POST', body: JSON.stringify(params) }).then((r) => r.ok ? r.json() : null)}
-    advancedFilters
-/>
+function CommandesTable() {
+    return (
+        <DataTable
+            fetchData={(params) =>
+                fetch('/api/commandes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params),
+                }).then((res) => (res.ok ? res.json() : null))
+            }
+            onRowClick={(id, row) => console.log('ligne cliquée', id, row)}
+            advancedFilters
+        />
+    );
+}
 ```
 
-Ou en composant seulement `useDataTable` + `Table` + `Pagination` avec ta propre UI de
-filtre (voir la conversation précédente pour l'exemple complet).
+#### Props de `<DataTable />`
 
-## Build & publish
+| Prop | Type | Description |
+|---|---|---|
+| `fetchData` | `(params) => Promise<FetchResult \| null>` | **Obligatoire.** Appelée à chaque changement de page/tri/filtre. |
+| `onRowClick` | `(id, row) => void` | Appelée au clic sur une ligne |
+| `filterEnabled` | `boolean` (défaut `true`) | Affiche le bouton de filtre rapide par colonne |
+| `sortingEnabled` | `boolean` (défaut `true`) | Active le tri au clic sur l'en-tête |
+| `advancedFilters` | `boolean` (défaut `false`) | Affiche le panneau de filtres avancés (nécessite `setFilter`/`paramFilter` côté serveur) |
+| `height` | `string` (défaut `'76vh'`) | Hauteur max de la zone de défilement |
+| `rowsPerPageOptions` | `number[]` | Choix disponibles pour le nombre de lignes par page |
+| `defaultRowsPerPage` | `number` | Valeur par défaut |
+| `onImagePreview` | `(src) => void` | Appelée au clic sur une image (sinon ouverture dans un nouvel onglet) |
+
+### Utilisation avec ta propre UI de filtre
+
+Si le système de filtre par défaut ne convient pas, utilise le hook et les composants séparément :
+
+```tsx
+import { useDataTable, Table, Pagination } from '@benjosivo/table-query/react';
+
+function CommandesTable() {
+    const table = useDataTable({ fetchData: fetchCommandes });
+    const [recherche, setRecherche] = useState('');
+
+    const rechercher = () => {
+        table.replaceFilters({ reference: [`/*/${recherche}/*/`] });
+        // ou, filtre par filtre : table.setColumnFilter('statut', ['en_cours']);
+    };
+
+    return (
+        <>
+            <input value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+            <button onClick={rechercher}>Rechercher</button>
+
+            <Table
+                items={table.items}
+                fieldsType={table.fieldsType}
+                sortColumn={table.sortColumn}
+                sortDirection={table.sortDirection}
+                onSort={table.toggleSort}
+            />
+
+            <Pagination
+                page={table.page}
+                totalPages={table.totalPages}
+                perPage={table.perPage}
+                count={table.count}
+                onChangePerPage={table.changePerPage}
+                onFirst={table.firstPage}
+                onPrevious={table.previousPage}
+                onNext={table.nextPage}
+                onLast={table.lastPage}
+            />
+        </>
+    );
+}
+```
+
+`useDataTable` gère la pagination, le tri et l'appel réseau ; il n'impose aucune UI de filtre — `table.setColumnFilter(colonne, valeur)` et `table.replaceFilters(objet)` permettent de piloter le filtrage depuis n'importe quelle interface.
+
+### Format attendu par `fetchData`
+
+```ts
+interface FetchParams {
+    limit: number;
+    offset: number;
+    sorting?: string;
+    filtre?: Record<string, unknown>;
+    setFilter?: boolean;
+}
+
+interface FetchResult<T> {
+    items: T[];
+    count: number;
+    fieldsType?: { fieldType: string }[]; // 'DATE' | 'DATETIME' | 'JSON' | 'FILE' | 'BLOB' | ...
+    filtre?: FilterConfig;       // renvoyé par le serveur si des filtres avancés sont demandés
+    cleRecupFiltre?: string;     // utilisé en interne pour le polling du cache
+}
+```
+
+C'est exactement la forme renvoyée par `reqTableQuery` côté serveur.
+
+---
+
+## Build
 
 ```bash
-npm run build     # tsc → dist/react + dist/server
-npm publish       # même config GitHub Packages que @benjosivo/mysql
+npm run build   # compile src/react et src/server dans dist/
 ```
