@@ -163,7 +163,11 @@ export function createTableQueryModule(deps: TableQueryDeps) {
 
         if (cleRecupFiltre && cache) {
             const titreRecupFiltres = `tableQuery:recupFiltres:${cleRecupFiltre}`;
-            await cache.setSQLCache(titreRecupFiltres, { title: titreRecupFiltres, data: { status: `Waiting` }, expiration: Date.now() + 60 * 60 * 1000 });
+            await cache.setSQLCache(titreRecupFiltres, {
+                title: titreRecupFiltres,
+                data: { status: `Waiting` },
+                expiration: Date.now() + 60 * 60 * 1000,
+            });
         }
 
         const filtres = await computeFiltersViaTempTable({ baseQuery, argsQuery, columns, paramFilter });
@@ -174,7 +178,11 @@ export function createTableQueryModule(deps: TableQueryDeps) {
         }
 
         if (keepCache && cache) {
-            await cache.setSQLCache(keepCache.titleSQLCacheFiltre, { title: keepCache.titleSQLCacheFiltre, data: filtres, expiration: Date.now() + keepCache.keepCache });
+            await cache.setSQLCache(keepCache.titleSQLCacheFiltre, {
+                title: keepCache.titleSQLCacheFiltre,
+                data: filtres,
+                expiration: Date.now() + keepCache.keepCache,
+            });
         }
         return filtres;
     }
@@ -182,7 +190,8 @@ export function createTableQueryModule(deps: TableQueryDeps) {
     function buildWhereClause(filtres: Record<string, any>): string {
         if (Object.keys(filtres).length === 0) return '';
 
-        function singleCondition(key: string, val: string): string {
+        function singleCondition(key: string, val: string): string | undefined {
+            if (!val) return undefined;
             const lower = val.toLowerCase();
             if (lower === 'null' || lower === 'vide') return `\`${key}\` IS NULL`;
             if (lower === 'notnull' || lower === 'non vide') return `\`${key}\` IS NOT NULL`;
@@ -192,7 +201,8 @@ export function createTableQueryModule(deps: TableQueryDeps) {
 
         const conditions = Object.entries(filtres).map(([key, value]) => {
             if (Array.isArray(value)) {
-                return `(${value.map((val: any) => singleCondition(key, String(val).replaceAll('/*/', '%'))).join(' OR ')})`;
+                if (value.length > 0) return `(${value.map((val: any) => singleCondition(key, String(val).replaceAll('/*/', '%'))).join(' OR ')})`;
+                else return undefined;
             }
             if (value !== null && typeof value === 'object' && 'min' in value && 'max' in value) {
                 const min = value.date ? `'${deps.convertToMySQLDateTime(value.min)}'` : value.min;
@@ -209,7 +219,12 @@ export function createTableQueryModule(deps: TableQueryDeps) {
         return `WHERE ${conditions.filter((el) => !!el).join(' AND ')}`;
     }
 
-    async function computeFiltersViaTempTable(opt: { baseQuery: string; argsQuery: any[] | undefined; columns: string[]; paramFilter: ParamFilterType[] }) {
+    async function computeFiltersViaTempTable(opt: {
+        baseQuery: string;
+        argsQuery: any[] | undefined;
+        columns: string[];
+        paramFilter: ParamFilterType[];
+    }) {
         const { baseQuery, argsQuery, columns, paramFilter } = opt;
         const tmpTable = `tmp_filter_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
