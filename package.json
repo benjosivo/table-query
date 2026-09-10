@@ -1,6 +1,6 @@
 {
     "name": "@benjosivo/table-query",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Table triable/filtrable/paginée : hook + composants React d'un côté (`/react`), logique SQL de pagination/tri/filtres côté serveur de l'autre (`/server`). Un projet peut n'utiliser qu'un des deux côtés.",
     "keywords": [],
     "homepage": "https://github.com/benjosivo/table-query#readme",
