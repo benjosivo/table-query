@@ -25,6 +25,7 @@ export interface FetchResult<T> {
     /** One entry per column, in the same order as Object.keys(items[0]). */
     fieldsType?: FieldTypeInfo[];
     /** Advanced filter definitions, sent back by the API (see FilterFieldConfig). */
+    paramFilter?: ParamFilter[];
     filtre?: FilterConfig;
     /** Key to re-fetch filter definitions later via a dedicated endpoint. */
     cleRecupFiltre?: string;
@@ -37,6 +38,8 @@ export interface FilterFieldConfig {
     /** MULTISELECT: string[]. SLIDER: [number, number]. DATE/DATETIME: [string, string]. */
     values: any;
 }
+
+export type ParamFilter = { nom: string; type: FilterFieldType };
 
 export type FilterConfig = Record<string, FilterFieldConfig>;
 

@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
-import type { FieldTypeInfo, SortDirection } from './types.js';
+import type { FieldTypeInfo, ParamFilter, SortDirection } from './types.js';
 import { Cell } from './Cell.js';
 
 export interface TableProps<T extends Record<string, any>> {
     items: T[];
     fieldsType?: FieldTypeInfo[];
+    paramFilter?: ParamFilter[];
     sortColumn?: string;
     sortDirection?: SortDirection;
     /** Called with the column name when its header is clicked (only if sortingEnabled). */
@@ -25,6 +26,7 @@ export interface TableProps<T extends Record<string, any>> {
 export function Table<T extends Record<string, any>>({
     items,
     fieldsType = [],
+    paramFilter,
     sortColumn,
     sortDirection,
     onSort,
@@ -33,46 +35,59 @@ export function Table<T extends Record<string, any>>({
     onImagePreview,
     renderHeaderExtra,
 }: TableProps<T>) {
-    const columns = useMemo(() => (items[0] ? Object.keys(items[0]).slice(1) : []), [items]);
+    const columns = useMemo(
+        () => (items[0] ? Object.keys(items[0]) : paramFilter && paramFilter.length > 0 ? paramFilter.map((el) => el.nom) : []),
+        [items],
+    );
     const idKey = items[0] ? Object.keys(items[0])[0] : null;
 
     return (
         <table>
-            <thead className="tableHeader">
+            <thead className='tableHeader'>
                 <tr>
-                    {columns.map((col) => (
-                        <th key={col} data-sort={col}>
-                            <div className="flex-row nowrap" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div
-                                    className="flex-row nowrap clickOnSort"
-                                    style={{ cursor: sortingEnabled ? 'pointer' : 'default' }}
-                                    onClick={() => sortingEnabled && onSort?.(col)}
-                                >
-                                    <span translate="yes">{col}</span>
-                                    {sortingEnabled && (
-                                        <span className="sort-icon">
-                                            {sortColumn === col ? (sortDirection === 'ASC' ? '\u2B06' : '\u2B07') : '\u2B07\u2B06'}
-                                        </span>
-                                    )}
+                    {columns
+                        .filter((col, i) => (paramFilter ? paramFilter[i].type !== 'HIDE' : true))
+                        .map((col, i) => (
+                            <th key={i} data-sort={col}>
+                                <div className='flex-row nowrap' style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div
+                                        className='flex-row nowrap clickOnSort'
+                                        style={{ cursor: sortingEnabled ? 'pointer' : 'default' }}
+                                        onClick={() => sortingEnabled && onSort?.(col)}
+                                    >
+                                        <span translate='yes'>{col}</span>
+                                        {sortingEnabled && (
+                                            <span className='sort-icon'>
+                                                {sortColumn === col ? (sortDirection === 'ASC' ? '\u2B06' : '\u2B07') : '\u2B07\u2B06'}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {renderHeaderExtra?.(col)}
                                 </div>
-                                {renderHeaderExtra?.(col)}
-                            </div>
-                        </th>
-                    ))}
+                            </th>
+                        ))}
                 </tr>
             </thead>
-            <tbody>
+            <tbody style={{ maxHeight: 'stretch', maxWidth: 'stretch', overflow: 'auto' }}>
+                {items.length === 0 && (
+                    <tr>
+                        <td colSpan={100}>No data found</td>
+                    </tr>
+                )}
                 {items.map((row, i) => (
                     <tr
                         key={idKey ? String(row[idKey]) : i}
                         style={{ cursor: onRowClick ? 'pointer' : 'default' }}
                         onClick={() => idKey && onRowClick?.(row[idKey], row)}
                     >
-                        {columns.map((col, colIdx) => (
-                            <td key={col}>
-                                <Cell value={row[col]} fieldType={fieldsType[colIdx + 1]?.fieldType} onImagePreview={onImagePreview} />
-                            </td>
-                        ))}
+                        {columns.map((col, colIdx) => {
+                            if (paramFilter && paramFilter[colIdx].type.trim() === 'HIDE') return;
+                            return (
+                                <td key={colIdx}>
+                                    <Cell value={row[col]} fieldType={fieldsType[colIdx]?.fieldType} onImagePreview={onImagePreview} />
+                                </td>
+                            );
+                        })}
                     </tr>
                 ))}
             </tbody>

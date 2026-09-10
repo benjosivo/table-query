@@ -9,16 +9,13 @@ interface CellProps {
 }
 
 export function Cell({ value, fieldType, onImagePreview }: CellProps) {
+    fieldType = fieldType.trim();
     if (fieldType === 'DATE') return <>{formattedDate(value, true)}</>;
     if (fieldType === 'DATETIME' || fieldType === 'TIMESTAMP') return <>{formattedDate(value)}</>;
-
-    if (fieldType === 'JSON' && value) {
-        return <span dangerouslySetInnerHTML={{ __html: truncatedJSON(value) }} />;
-    }
-
+    if (fieldType === 'JSON' && value) return <span dangerouslySetInnerHTML={{ __html: truncatedJSON(value) }} />;
     if ((fieldType === 'BLOB' || fieldType === 'FILE') && typeof value === 'string' && looksLikeFile(value)) {
         return (
-            <div className="flex-row">
+            <div className='flex-row'>
                 {value.split(';').map((file) =>
                     isImage(file) ? (
                         <LazyImage key={file} src={file} onClick={() => (onImagePreview ? onImagePreview(file) : window.open(file, '_blank'))} />

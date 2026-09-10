@@ -35,7 +35,7 @@ export function DataTable<T extends Record<string, any>>({
     };
 
     return (
-        <div className="flex-row nowrap" style={{ alignItems: 'flex-start', maxHeight: height }}>
+        <div className='flex-row nowrap' style={{ alignItems: 'flex-start', maxHeight: height }}>
             {advancedFilters && table.filterConfig && (
                 <FilterPanel
                     filterConfig={table.filterConfig}
@@ -45,11 +45,12 @@ export function DataTable<T extends Record<string, any>>({
                 />
             )}
 
-            <div className="frame" style={{ maxHeight: '-webkit-fill-available', minWidth: '10vw' }}>
+            <div className='frame' style={{ maxHeight: '-webkit-fill-available', minWidth: '10vw' }}>
                 <div style={{ maxHeight: '-webkit-fill-available', overflowY: 'auto', overflowX: 'auto' }}>
                     <Table
                         items={table.items}
                         fieldsType={table.fieldsType}
+                        paramFilter={table.paramFilter}
                         sortColumn={table.sortColumn}
                         sortDirection={table.sortDirection}
                         sortingEnabled={sortingEnabled}
@@ -61,7 +62,7 @@ export function DataTable<T extends Record<string, any>>({
                                 ? (col) => (
                                       <button
                                           style={{ padding: 5, marginTop: 0 }}
-                                          className="btnDataFilterTable"
+                                          className='btnDataFilterTable'
                                           onClick={(e) => {
                                               setOpenFilterCol(col);
                                               setFilterAnchor(e.currentTarget);
@@ -94,13 +95,13 @@ export function DataTable<T extends Record<string, any>>({
                     column={openFilterCol}
                     values={uniqueValuesFor(openFilterCol)}
                     anchorEl={filterAnchor}
-                    onSort={(dir) => table.toggleSort(openFilterCol, dir)}
-                    onApply={(selected) => table.setColumnFilter(openFilterCol, selected ?? undefined)}
+                    onSort={(dir: any) => table.toggleSort(openFilterCol, dir)}
+                    onApply={(selected: any) => table.setColumnFilter(openFilterCol, selected ?? undefined)}
                     onClose={() => setOpenFilterCol(null)}
                 />
             )}
 
-            {table.loading && <div className="table-loading-overlay">Chargement...</div>}
+            {table.loading && <div className='table-loading-overlay'>Chargement...</div>}
         </div>
     );
 }

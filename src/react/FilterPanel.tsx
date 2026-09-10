@@ -13,20 +13,22 @@ export function FilterPanel({ filterConfig, activeFilters, onChange, onClearAll 
     const hasActive = Object.keys(activeFilters).length > 0;
 
     return (
-        <div className="flex-column nowrap" style={{ height: '-webkit-fill-available' }}>
+        <div className='flex-column nowrap' style={{ height: '-webkit-fill-available' }}>
             <button style={{ maxWidth: '18rem' }} onClick={() => setOpen((o) => !o)}>
                 Filtres
             </button>
             {open && (
-                <div className="responsive-panel frame nowrap active" style={{ minWidth: 'min-content' }}>
+                <div className='responsive-panel frame nowrap active' style={{ minWidth: 'min-content' }}>
                     {hasActive && <button onClick={onClearAll}>Réinitialiser les filtres</button>}
                     {Object.entries(filterConfig).map(([key, info]) => {
                         if (!info.type || info.type === 'HIDE') return null;
                         return (
-                            <div key={key} className="flex-column frame">
+                            <div key={key} className='flex-column frame'>
                                 <span>{key}</span>
-                                {activeFilters[key] !== undefined && <button onClick={() => onChange(key, undefined)}>Réinitialiser le filtre</button>}
-                                <div className="filterOption" style={{ maxWidth: '-webkit-fill-available' }}>
+                                {activeFilters[key] !== undefined && (
+                                    <button onClick={() => onChange(key, undefined)}>Réinitialiser le filtre</button>
+                                )}
+                                <div className='filterOption' style={{ maxWidth: '-webkit-fill-available' }}>
                                     {['MULTISELECT', 'UNGROUP_MULTISELECT'].includes(info.type) && (
                                         <MultiSelectFilter
                                             filterKey={key}
@@ -37,10 +39,7 @@ export function FilterPanel({ filterConfig, activeFilters, onChange, onClearAll 
                                         />
                                     )}
                                     {info.type === 'SLIDER' && (
-                                        <SliderFilter
-                                            values={info.values as [number, number]}
-                                            onApply={(min, max) => onChange(key, { min, max })}
-                                        />
+                                        <SliderFilter values={info.values as [number, number]} onApply={(min, max) => onChange(key, { min, max })} />
                                     )}
                                     {['DATE', 'DATETIME'].includes(info.type) && (
                                         <DateFilter
@@ -102,30 +101,30 @@ function MultiSelectFilter({
     };
 
     return (
-        <div className="predefinedInfos frame">
-            <div className="input-field">
-                <input type="text" placeholder="Rechercher" autoComplete="off" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className='predefinedInfos frame'>
+            <div className='input-field'>
+                <input type='text' placeholder='Rechercher' autoComplete='off' value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <div className="selectAllRow flex-row nowrap" style={{ padding: '4px 0', borderBottom: '1px solid #ccc' }}>
+            <div className='selectAllRow flex-row nowrap' style={{ padding: '4px 0', borderBottom: '1px solid #ccc' }}>
                 <input
-                    type="checkbox"
+                    type='checkbox'
                     checked={allChecked}
-                    ref={(el) => el && (el.indeterminate = !allChecked && someChecked)}
+                    ref={(el: any) => el && (el.indeterminate = !allChecked && someChecked)}
                     onChange={(e) => toggleAll(e.target.checked)}
                 />
                 <label style={{ fontWeight: 'bold' }}>(Sélectionner tout)</label>
             </div>
-            <div style={{ overflowY: 'auto', maxHeight: '20vh', maxWidth: '25rem' }} className="listPredefinedInfos flex-column nowrap">
+            <div style={{ overflowY: 'auto', maxHeight: '20vh', maxWidth: '25rem' }} className='listPredefinedInfos flex-column nowrap'>
                 {items.map((val) => (
-                    <div key={val || '(empty)'} className="flex-row nowrap">
-                        <input type="checkbox" checked={selected === null || selected.includes(val)} onChange={() => toggleOne(val)} />
+                    <div key={val || '(empty)'} className='flex-row nowrap'>
+                        <input type='checkbox' checked={selected === null || selected.includes(val)} onChange={() => toggleOne(val)} />
                         <label style={{ cursor: 'pointer' }} onClick={() => toggleOne(val)}>
                             {val}
                         </label>
                     </div>
                 ))}
             </div>
-            <button className="btn-accent" onClick={apply}>
+            <button className='btn-accent' onClick={apply}>
                 Appliquer
             </button>
         </div>
@@ -146,26 +145,26 @@ function SliderFilter({ values, onApply }: { values: [number, number]; onApply: 
 
     return (
         <div style={{ padding: '0 1rem 1rem 0' }}>
-            <div className="flex-row nowrap" style={{ justifyContent: 'space-between' }}>
+            <div className='flex-row nowrap' style={{ justifyContent: 'space-between' }}>
                 <input
-                    type="number"
-                    className="inputSlider"
+                    type='number'
+                    className='inputSlider'
                     value={min}
                     min={values[0]}
                     max={max}
                     onChange={(e) => commit(Number(e.target.value), max)}
                 />
                 <input
-                    type="number"
-                    className="inputSlider"
+                    type='number'
+                    className='inputSlider'
                     value={max}
                     min={min}
                     max={values[1]}
                     onChange={(e) => commit(min, Number(e.target.value))}
                 />
             </div>
-            <input type="range" min={values[0]} max={values[1]} value={min} onChange={(e) => commit(Number(e.target.value), max)} />
-            <input type="range" min={values[0]} max={values[1]} value={max} onChange={(e) => commit(min, Number(e.target.value))} />
+            <input type='range' min={values[0]} max={values[1]} value={min} onChange={(e) => commit(Number(e.target.value), max)} />
+            <input type='range' min={values[0]} max={values[1]} value={max} onChange={(e) => commit(min, Number(e.target.value))} />
         </div>
     );
 }
@@ -192,13 +191,13 @@ function DateFilter({ type, values, onApply }: { type: 'DATE' | 'DATETIME'; valu
     };
 
     return (
-        <div className="flex-column nowrap">
-            <div className="flex-row nowrap" style={{ justifyContent: 'space-between' }}>
+        <div className='flex-column nowrap'>
+            <div className='flex-row nowrap' style={{ justifyContent: 'space-between' }}>
                 <input type={inputType} value={min} min={fmt(values[0])} max={fmt(values[1])} onChange={(e) => setMin(e.target.value)} />
                 <input type={inputType} value={max} min={fmt(values[0])} max={fmt(values[1])} onChange={(e) => setMax(e.target.value)} />
             </div>
             {canApply && (
-                <button className="btn-accent" onClick={apply}>
+                <button className='btn-accent' onClick={apply}>
                     Appliquer
                 </button>
             )}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DataTableProps, FetchResult, FieldTypeInfo, FilterConfig, SortDirection } from './types.js';
+import type { DataTableProps, FetchResult, FieldTypeInfo, FilterConfig, SortDirection, ParamFilter } from './types.js';
 
 export function useDataTable<T extends Record<string, any>>({
     fetchData,
@@ -11,6 +11,7 @@ export function useDataTable<T extends Record<string, any>>({
     const [items, setItems] = useState<T[]>([]);
     const [count, setCount] = useState(0);
     const [fieldsType, setFieldsType] = useState<FieldTypeInfo[]>([]);
+    const [paramFilter, setParamFilter] = useState<ParamFilter[]>([]);
     const [loading, setLoading] = useState(false);
 
     const [page, setPage] = useState(1);
@@ -53,6 +54,7 @@ export function useDataTable<T extends Record<string, any>>({
                 setItems(result.items || []);
                 setCount(result.count ?? 0);
                 setFieldsType(result.fieldsType || []);
+                setParamFilter(result.paramFilter || []);
                 setPage(targetPage);
 
                 if (result.filtre) setFilterConfig(result.filtre);
@@ -91,15 +93,12 @@ export function useDataTable<T extends Record<string, any>>({
     const firstPage = useCallback(() => goToPage(1), [goToPage]);
     const lastPage = useCallback(() => goToPage(totalPages), [goToPage, totalPages]);
 
-    const toggleSort = useCallback(
-        (column: string, forceDirection?: SortDirection) => {
-            setSortColumn((prevCol) => {
-                setSortDirection((prevDir) => forceDirection ?? (prevCol === column ? (prevDir === 'ASC' ? 'DESC' : 'ASC') : 'ASC'));
-                return column;
-            });
-        },
-        [],
-    );
+    const toggleSort = useCallback((column: string, forceDirection?: SortDirection) => {
+        setSortColumn((prevCol) => {
+            setSortDirection((prevDir) => forceDirection ?? (prevCol === column ? (prevDir === 'ASC' ? 'DESC' : 'ASC') : 'ASC'));
+            return column;
+        });
+    }, []);
 
     const setColumnFilter = useCallback((key: string, value: unknown) => {
         setFilters((prev) => {
@@ -123,6 +122,7 @@ export function useDataTable<T extends Record<string, any>>({
         items,
         count,
         fieldsType,
+        paramFilter,
         loading,
         page,
         perPage,
