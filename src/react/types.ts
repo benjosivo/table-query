@@ -43,6 +43,9 @@ export type ParamFilter = { nom: string; type: FilterFieldType };
 
 export type FilterConfig = Record<string, FilterFieldConfig>;
 
+/** Where the selection (checkbox) column is inserted among the visible columns. */
+export type SelectionColumnPosition = number | 'start' | 'end';
+
 export interface DataTableProps<T extends Record<string, any>> {
     /** Called every time the table needs data (page change, sort, filter, page size). */
     fetchData: (params: FetchParams) => Promise<FetchResult<T> | null>;
@@ -62,4 +65,12 @@ export interface DataTableProps<T extends Record<string, any>> {
     onImagePreview?: (src: string) => void;
     /** Optional endpoint to lazily fetch filter definitions using cleRecupFiltre. */
     fetchFilterConfig?: (cleRecupFiltre: string) => Promise<FilterConfig>;
+    /** Show a checkbox column; the header checkbox selects/deselects every displayed row. Default false. */
+    selectable?: boolean;
+    /** Where the checkbox column goes among the visible columns: 'start' (default), 'end', or a 0-based index. */
+    selectionColumnPosition?: SelectionColumnPosition;
+    /** Controlled selection: ids (value of each row's first column) of the selected rows. Leave undefined to let the table hold the selection itself. */
+    selectedIds?: any[];
+    /** Called on every selection change, with the selected ids and the matching rows (same shape as onRowClick). */
+    onSelectionChange?: (ids: any[], rows: T[]) => void;
 }

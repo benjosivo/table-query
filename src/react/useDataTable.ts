@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DataTableProps, FetchResult, FieldTypeInfo, FilterConfig, SortDirection, ParamFilter } from './types.js';
+import { getRowId, selectionKey } from './utils.js';
 
 export function useDataTable<T extends Record<string, any>>({
     fetchData,
@@ -7,7 +8,12 @@ export function useDataTable<T extends Record<string, any>>({
     rowsPerPageOptions = [10, 25, 50, 100, 250, 500, 1000],
     defaultRowsPerPage = 100,
     fetchFilterConfig,
-}: Pick<DataTableProps<T>, 'fetchData' | 'advancedFilters' | 'rowsPerPageOptions' | 'defaultRowsPerPage' | 'fetchFilterConfig'>) {
+    selectedIds: controlledSelectedIds,
+    onSelectionChange,
+}: Pick<
+    DataTableProps<T>,
+    'fetchData' | 'advancedFilters' | 'rowsPerPageOptions' | 'defaultRowsPerPage' | 'fetchFilterConfig' | 'selectedIds' | 'onSelectionChange'
+>) {
     const [items, setItems] = useState<T[]>([]);
     const [count, setCount] = useState(0);
     const [fieldsType, setFieldsType] = useState<FieldTypeInfo[]>([]);
@@ -25,6 +31,16 @@ export function useDataTable<T extends Record<string, any>>({
 
     // Guards against a slow, stale request overwriting a newer one.
     const requestId = useRef(0);
+
+    // Selection is uncontrolled unless the parent passes `selectedIds`.
+    const [internalSelectedIds, setInternalSelectedIds] = useState<any[]>([]);
+    const isSelectionControlled = controlledSelectedIds !== undefined;
+    const selectedIds = isSelectionControlled ? controlledSelectedIds : internalSelectedIds;
+    const selectedKeys = useMemo(() => new Set(selectedIds.map(selectionKey)), [selectedIds]);
+
+    /** Every row loaded since the last selection reset, so a row selected on a page we left
+     * can still be handed back to the parent in full. */
+    const knownRows = useRef(new Map<string, T>());
 
     const sorting = useMemo(() => (sortColumn ? `\`${sortColumn}\` ${sortDirection}` : ''), [sortColumn, sortDirection]);
     const totalPages = useMemo(() => Math.max(1, Math.ceil(count / perPage)), [count, perPage]);
@@ -51,7 +67,13 @@ export function useDataTable<T extends Record<string, any>>({
                     return;
                 }
 
-                setItems(result.items || []);
+                const rows = result.items || [];
+                for (const row of rows) {
+                    const rowId = getRowId(row);
+                    if (rowId !== undefined) knownRows.current.set(selectionKey(rowId), row);
+                }
+
+                setItems(rows);
                 setCount(result.count ?? 0);
                 setFieldsType(result.fieldsType || []);
                 setParamFilter(result.paramFilter || []);
@@ -116,6 +138,76 @@ export function useDataTable<T extends Record<string, any>>({
      * doesn't reason "per column" and just wants to hand over its own `filtre` payload. */
     const replaceFilters = useCallback((next: Record<string, unknown>) => setFilters(next), []);
 
+    // ==================== SELECTION ====================
+
+    const rowsOf = useCallback((ids: any[]): T[] => {
+        const rows: T[] = [];
+        for (const id of ids) {
+            const row = knownRows.current.get(selectionKey(id));
+            if (row) rows.push(row);
+        }
+        return rows;
+    }, []);
+
+    const selectedRows = useMemo(() => rowsOf(selectedIds), [selectedIds, items, rowsOf]);
+
+    const applySelection = useCallback(
+        (nextIds: any[]) => {
+            if (!isSelectionControlled) setInternalSelectedIds(nextIds);
+            onSelectionChange?.(nextIds, rowsOf(nextIds));
+        },
+        [isSelectionControlled, onSelectionChange, rowsOf],
+    );
+
+    const isRowSelected = useCallback((row: T) => selectedKeys.has(selectionKey(getRowId(row))), [selectedKeys]);
+
+    const setRowSelected = useCallback(
+        (row: T, selected: boolean) => {
+            const id = getRowId(row);
+            if (id === undefined) return;
+            const key = selectionKey(id);
+            knownRows.current.set(key, row);
+            if (selected === selectedKeys.has(key)) return;
+            applySelection(selected ? [...selectedIds, id] : selectedIds.filter((v) => selectionKey(v) !== key));
+        },
+        [selectedIds, selectedKeys, applySelection],
+    );
+
+    const toggleRowSelection = useCallback((row: T) => setRowSelected(row, !isRowSelected(row)), [setRowSelected, isRowSelected]);
+
+    /** Select/deselect every row of the current page; rows selected on other pages are left alone. */
+    const setAllRowsSelected = useCallback(
+        (selected: boolean) => {
+            const pageIds: any[] = [];
+            for (const row of items) {
+                const id = getRowId(row);
+                if (id === undefined) continue;
+                knownRows.current.set(selectionKey(id), row);
+                pageIds.push(id);
+            }
+            const pageKeys = new Set(pageIds.map(selectionKey));
+            const others = selectedIds.filter((id) => !pageKeys.has(selectionKey(id)));
+            applySelection(selected ? [...others, ...pageIds] : others);
+        },
+        [items, selectedIds, applySelection],
+    );
+
+    const clearSelection = useCallback(() => {
+        if (selectedIds.length > 0) applySelection([]);
+    }, [selectedIds, applySelection]);
+
+    // The selection spans pages, but a new sort/filter means a different dataset: start over.
+    const firstDatasetRender = useRef(true);
+    useEffect(() => {
+        if (firstDatasetRender.current) {
+            firstDatasetRender.current = false;
+            return;
+        }
+        knownRows.current.clear();
+        clearSelection();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sorting, filters]);
+
     const changePerPage = useCallback((n: number) => setPerPage(n), []);
 
     return {
@@ -132,6 +224,13 @@ export function useDataTable<T extends Record<string, any>>({
         sortDirection,
         filters,
         filterConfig,
+        selectedIds,
+        selectedRows,
+        isRowSelected,
+        toggleRowSelection,
+        setRowSelected,
+        setAllRowsSelected,
+        clearSelection,
         toggleSort,
         setColumnFilter,
         replaceFilters,

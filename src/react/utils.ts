@@ -36,3 +36,15 @@ export function truncatedJSON(value: unknown, maxLen = 200): string {
     const truncated = str.length > maxLen ? `${str.slice(0, maxLen)}...` : str;
     return syntaxHighlightJSON(truncated);
 }
+
+/** Id of a row: the value of its first column — same rule as onRowClick. */
+export function getRowId(row: Record<string, any> | undefined): any {
+    if (!row) return undefined;
+    const key = Object.keys(row)[0];
+    return key === undefined ? undefined : row[key];
+}
+
+/** Ids come from the data (numbers, strings, ...) and can be compared to values given by the parent, so normalize them. */
+export function selectionKey(id: any): string {
+    return String(id);
+}

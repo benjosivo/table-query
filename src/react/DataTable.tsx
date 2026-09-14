@@ -24,8 +24,20 @@ export function DataTable<T extends Record<string, any>>({
     defaultRowsPerPage,
     onImagePreview,
     fetchFilterConfig,
+    selectable = false,
+    selectionColumnPosition = 'start',
+    selectedIds,
+    onSelectionChange,
 }: DataTableProps<T>) {
-    const table = useDataTable<T>({ fetchData, advancedFilters, rowsPerPageOptions, defaultRowsPerPage, fetchFilterConfig });
+    const table = useDataTable<T>({
+        fetchData,
+        advancedFilters,
+        rowsPerPageOptions,
+        defaultRowsPerPage,
+        fetchFilterConfig,
+        selectedIds,
+        onSelectionChange,
+    });
     const [openFilterCol, setOpenFilterCol] = useState<string | null>(null);
     const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
 
@@ -57,6 +69,11 @@ export function DataTable<T extends Record<string, any>>({
                         onSort={(col) => table.toggleSort(col)}
                         onRowClick={onRowClick}
                         onImagePreview={onImagePreview}
+                        selectable={selectable}
+                        selectionColumnPosition={selectionColumnPosition}
+                        selectedIds={table.selectedIds}
+                        onToggleRow={table.setRowSelected}
+                        onToggleAllRows={table.setAllRowsSelected}
                         renderHeaderExtra={
                             filterEnabled && !advancedFilters
                                 ? (col) => (
