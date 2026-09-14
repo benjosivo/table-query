@@ -136,6 +136,54 @@ function CommandesTable() {
 | `rowsPerPageOptions` | `number[]` | Choix disponibles pour le nombre de lignes par page |
 | `defaultRowsPerPage` | `number` | Valeur par défaut |
 | `onImagePreview` | `(src) => void` | Appelée au clic sur une image (sinon ouverture dans un nouvel onglet) |
+| `selectable` | `boolean` (défaut `false`) | Affiche une colonne de checkbox (voir « Sélection de lignes ») |
+| `selectionColumnPosition` | `number \| 'start' \| 'end'` (défaut `'start'`) | Position de la colonne de checkbox parmi les colonnes visibles |
+| `selectedIds` | `any[]` | Sélection contrôlée par le parent (voir plus bas) |
+| `onSelectionChange` | `(ids, rows) => void` | Appelée à chaque changement de sélection, avec les ids et les lignes complètes |
+
+### Sélection de lignes (checkbox)
+
+Avec `selectable`, une colonne de checkbox est ajoutée. La checkbox de l'en-tête coche/décoche **toutes les lignes affichées** (la page courante) et passe en état indéterminé quand seule une partie l'est.
+
+```tsx
+const [selection, setSelection] = useState<any[]>([]);
+
+<DataTable
+    fetchData={fetchCommandes}
+    selectable
+    selectionColumnPosition='start'   // 'start' | 'end' | index (ex. 2)
+    onSelectionChange={(ids, rows) => {
+        setSelection(ids);            // ids = valeur de la 1ère colonne de chaque ligne
+        console.log(rows);            // les lignes entières, comme dans onRowClick
+    }}
+/>
+```
+
+- **Identifiant d'une ligne** : la valeur de sa **première colonne** — la même règle que `onRowClick`. La colonne peut être masquée (`HIDE`), l'identifiant reste utilisable.
+- **Position** : `'start'` (défaut), `'end'`, ou un index 0-based **parmi les colonnes visibles** (`2` = 3ᵉ colonne ; les colonnes `HIDE` ne comptent pas). Un index hors limites est ramené au début ou à la fin.
+- **Entre les pages** : la sélection est cumulative — on peut cocher des lignes page 1, aller page 2, et `onSelectionChange` renvoie l'ensemble (ids **et** lignes complètes, même celles qui ne sont plus affichées).
+- **Changement de tri ou de filtre** : le jeu de données n'est plus le même, la sélection est donc vidée et `onSelectionChange([], [])` est appelée. Changer de page ou le nombre de lignes par page ne la vide pas.
+- Cliquer une checkbox ne déclenche pas `onRowClick`.
+
+#### Sélection contrôlée
+
+Si le parent passe `selectedIds`, c'est lui qui détient l'état : le tableau n'affiche que ce qu'on lui donne. Pratique pour cocher des lignes par programme ou vider la sélection après une action groupée.
+
+```tsx
+const [selection, setSelection] = useState<any[]>([]);
+
+const supprimer = async () => {
+    await fetch('/api/commandes/suppression', { method: 'POST', body: JSON.stringify({ ids: selection }) });
+    setSelection([]); // on vide la sélection nous-mêmes
+};
+
+<DataTable
+    fetchData={fetchCommandes}
+    selectable
+    selectedIds={selection}
+    onSelectionChange={(ids) => setSelection(ids)}
+/>
+```
 
 ### Utilisation avec ta propre UI de filtre
 
@@ -183,6 +231,32 @@ function CommandesTable() {
 ```
 
 `useDataTable` gère la pagination, le tri et l'appel réseau ; il n'impose aucune UI de filtre — `table.setColumnFilter(colonne, valeur)` et `table.replaceFilters(objet)` permettent de piloter le filtrage depuis n'importe quelle interface.
+
+Le hook gère aussi la sélection, que tu utilises `<DataTable />` ou le `<Table />` nu :
+
+```tsx
+const table = useDataTable({ fetchData, onSelectionChange: (ids, rows) => console.log(ids, rows) });
+
+<Table
+    items={table.items}
+    fieldsType={table.fieldsType}
+    selectable
+    selectionColumnPosition='end'
+    selectedIds={table.selectedIds}
+    onToggleRow={table.setRowSelected}
+    onToggleAllRows={table.setAllRowsSelected}
+/>
+```
+
+| Valeur renvoyée | Type | Description |
+|---|---|---|
+| `selectedIds` | `any[]` | Ids sélectionnés (1ère colonne de chaque ligne) |
+| `selectedRows` | `T[]` | Les lignes complètes correspondantes, pages précédentes comprises |
+| `isRowSelected` | `(row) => boolean` | |
+| `setRowSelected` | `(row, selected) => void` | |
+| `toggleRowSelection` | `(row) => void` | |
+| `setAllRowsSelected` | `(selected) => void` | Toutes les lignes affichées ; les autres pages ne sont pas touchées |
+| `clearSelection` | `() => void` | Vide la sélection |
 
 ### Format attendu par `fetchData`
 
