@@ -1,5 +1,7 @@
 // ==================== TYPES ====================
 
+import type { CSSProperties } from 'react';
+
 export type SortDirection = 'ASC' | 'DESC';
 
 /** Matches the "fieldType" info your API already returns per column. */
@@ -29,6 +31,8 @@ export interface FetchResult<T> {
     filtre?: FilterConfig;
     /** Key to re-fetch filter definitions later via a dedicated endpoint. */
     cleRecupFiltre?: string;
+    /** Conditional formatting rules defined by the API (see FormattingRule). */
+    formattingRules?: FormattingRule[];
 }
 
 export type FilterFieldType = 'MULTISELECT' | 'UNGROUP_MULTISELECT' | 'SLIDER' | 'DATE' | 'DATETIME' | 'HIDE';
@@ -45,6 +49,71 @@ export type FilterConfig = Record<string, FilterFieldConfig>;
 
 /** Where the selection (checkbox) column is inserted among the visible columns. */
 export type SelectionColumnPosition = number | 'start' | 'end';
+
+// ==================== CONDITIONAL FORMATTING ====================
+
+export type FormattingOperator =
+    | '='
+    | '!='
+    | '<'
+    | '<='
+    | '>'
+    | '>='
+    | 'between'
+    | 'in'
+    | 'contains'
+    | 'notContains'
+    | 'startsWith'
+    | 'endsWith'
+    | 'isNull'
+    | 'isNotNull';
+
+/** What a rule paints: the whole row (default), the tested column's cell, or a given list of columns. */
+export type FormattingTarget = 'row' | 'cell' | string[];
+
+/** How the two operands are compared. 'auto' infers it from the values (see README). */
+export type FormattingValueType = 'auto' | 'string' | 'number' | 'date' | 'boolean';
+
+export interface FormattingStyle {
+    /** Inline style — the package ships no CSS, so this is the path that works with no setup. */
+    style?: CSSProperties;
+    /** Class added to the <tr> (target 'row') or to the <td> (target 'cell' | string[]). */
+    className?: string;
+}
+
+export interface FormattingRule extends FormattingStyle {
+    /** Stable id, needed by the editor to reorder/disable. Generated when missing. */
+    id?: string;
+    /** Free-form label shown in the editor; a summary is generated when missing. */
+    label?: string;
+    /** Name of the tested column (a key of the row objects), not its position. */
+    column: string;
+    operator: FormattingOperator;
+    /** Operand(s): a scalar, [min, max] or {min, max} for 'between', an array for 'in', unused for isNull/isNotNull. */
+    value?: unknown;
+    valueType?: FormattingValueType;
+    /** Defaults to 'row'. */
+    target?: FormattingTarget;
+    /** Stop evaluating later rules for the targets this rule wrote to. */
+    stopIfTrue?: boolean;
+    /** false keeps the rule in the list without applying it. Defaults to true. */
+    enabled?: boolean;
+}
+
+export interface CellFormatting extends FormattingStyle {}
+
+export interface RowFormatting {
+    rowStyle?: CSSProperties;
+    rowClassName?: string;
+    /** Keyed by column NAME — never by the positional index of fieldsType/paramFilter. */
+    cellStyles: Record<string, CellFormatting>;
+}
+
+/** Which layer a rule came from: the app's props, the API payload, or the end user's editor. */
+export type FormattingRuleSource = 'props' | 'server' | 'user';
+
+export type GetRowFormatting<T> = (row: T, rowIndex: number) => CellFormatting | null | undefined;
+export type GetCellFormatting<T> = (column: string, value: any, row: T, rowIndex: number) => CellFormatting | null | undefined;
 
 export interface DataTableProps<T extends Record<string, any>> {
     /** Called every time the table needs data (page change, sort, filter, page size). */
@@ -73,4 +142,19 @@ export interface DataTableProps<T extends Record<string, any>> {
     selectedIds?: any[];
     /** Called on every selection change, with the selected ids and the matching rows (same shape as onRowClick). */
     onSelectionChange?: (ids: any[], rows: T[]) => void;
+    /** Conditional formatting rules set by the app — the lowest-priority layer. */
+    formattingRules?: FormattingRule[];
+    /** Escape hatch for logic spanning several columns. Applied last, after every rule. */
+    getRowFormatting?: GetRowFormatting<T>;
+    getCellFormatting?: GetCellFormatting<T>;
+    /** Show the toolbar and its formatting button (the end-user editor). Default false. */
+    formattingEditor?: boolean;
+    /** When set, the user's rules are saved to / reloaded from localStorage under this key. */
+    formattingStorageKey?: string;
+    /** Called on every change to the user's rules, so the host can persist them server-side. */
+    onFormattingRulesChange?: (rules: FormattingRule[]) => void;
+    /** Rehydrate the user's rules from your own backend — takes precedence over localStorage. */
+    initialUserFormattingRules?: FormattingRule[];
+    /** Label of the toolbar button. Default 'Mise en forme'. */
+    formattingButtonLabel?: string;
 }

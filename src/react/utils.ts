@@ -48,3 +48,13 @@ export function getRowId(row: Record<string, any> | undefined): any {
 export function selectionKey(id: any): string {
     return String(id);
 }
+
+/**
+ * Column names of a table: the keys of the first row, falling back to the filter
+ * definitions when there is no data. Shared by `Table` and the formatting editor so the
+ * two can't drift apart.
+ */
+export function columnNamesOf(items: Record<string, any>[], paramFilter?: { nom: string }[]): string[] {
+    if (items[0]) return Object.keys(items[0]);
+    return paramFilter && paramFilter.length > 0 ? paramFilter.map((el) => el.nom) : [];
+}
