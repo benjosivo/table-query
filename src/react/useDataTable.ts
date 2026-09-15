@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DataTableProps, FetchResult, FieldTypeInfo, FilterConfig, SortDirection, ParamFilter } from './types.js';
+import type { DataTableProps, FetchResult, FieldTypeInfo, FilterConfig, FormattingRule, SortDirection, ParamFilter } from './types.js';
+import { sanitizeFormattingRules } from './formatting.js';
 import { getRowId, selectionKey } from './utils.js';
 
 export function useDataTable<T extends Record<string, any>>({
@@ -28,6 +29,7 @@ export function useDataTable<T extends Record<string, any>>({
 
     const [filterConfig, setFilterConfig] = useState<FilterConfig | null>(null);
     const [cleRecupFiltre, setCleRecupFiltre] = useState<string | undefined>();
+    const [serverFormattingRules, setServerFormattingRules] = useState<FormattingRule[]>([]);
 
     // Guards against a slow, stale request overwriting a newer one.
     const requestId = useRef(0);
@@ -81,6 +83,7 @@ export function useDataTable<T extends Record<string, any>>({
 
                 if (result.filtre) setFilterConfig(result.filtre);
                 if (result.cleRecupFiltre) setCleRecupFiltre(result.cleRecupFiltre);
+                if (result.formattingRules) setServerFormattingRules(sanitizeFormattingRules(result.formattingRules));
             } finally {
                 if (id === requestId.current) setLoading(false);
             }
@@ -224,6 +227,7 @@ export function useDataTable<T extends Record<string, any>>({
         sortDirection,
         filters,
         filterConfig,
+        serverFormattingRules,
         selectedIds,
         selectedRows,
         isRowSelected,

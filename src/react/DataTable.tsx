@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DataTableProps } from './types.js';
 import { useDataTable } from './useDataTable.js';
+import { useFormattingRules } from './useFormattingRules.js';
+import { FormattingToolbar } from './FormattingToolbar.js';
+import { columnNamesOf } from './utils.js';
 import { FilterModal } from './FilterModal.js';
 import { FilterPanel } from './FilterPanel.js';
 import { Table } from './Table.js';
@@ -28,6 +31,14 @@ export function DataTable<T extends Record<string, any>>({
     selectionColumnPosition = 'start',
     selectedIds,
     onSelectionChange,
+    formattingRules,
+    getRowFormatting,
+    getCellFormatting,
+    formattingEditor = false,
+    formattingStorageKey,
+    onFormattingRulesChange,
+    initialUserFormattingRules,
+    formattingButtonLabel,
 }: DataTableProps<T>) {
     const table = useDataTable<T>({
         fetchData,
@@ -40,6 +51,17 @@ export function DataTable<T extends Record<string, any>>({
     });
     const [openFilterCol, setOpenFilterCol] = useState<string | null>(null);
     const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
+
+    const formatting = useFormattingRules({
+        propsRules: formattingRules,
+        serverRules: table.serverFormattingRules,
+        storageKey: formattingStorageKey,
+        initialUserRules: initialUserFormattingRules,
+        onChange: onFormattingRulesChange,
+    });
+
+    // Same derivation as Table's, via the shared helper, so the editor's column list can't drift.
+    const columnsForEditor = useMemo(() => columnNamesOf(table.items, table.paramFilter), [table.items, table.paramFilter]);
 
     const uniqueValuesFor = (column: string): string[] => {
         const values = table.items.map((row) => String(row[column] ?? ''));
@@ -58,6 +80,17 @@ export function DataTable<T extends Record<string, any>>({
             )}
 
             <div className='frame' style={{ maxHeight: '-webkit-fill-available', minWidth: '10vw' }}>
+                {formattingEditor && (
+                    <div className='flex-row' style={{ justifyContent: 'flex-end' }}>
+                        <FormattingToolbar
+                            columns={columnsForEditor}
+                            fieldsType={table.fieldsType}
+                            paramFilter={table.paramFilter}
+                            label={formattingButtonLabel}
+                            {...formatting}
+                        />
+                    </div>
+                )}
                 <div style={{ maxHeight: '-webkit-fill-available', overflowY: 'auto', overflowX: 'auto' }}>
                     <Table
                         items={table.items}
@@ -74,6 +107,9 @@ export function DataTable<T extends Record<string, any>>({
                         selectedIds={table.selectedIds}
                         onToggleRow={table.setRowSelected}
                         onToggleAllRows={table.setAllRowsSelected}
+                        formattingRules={formatting.rules}
+                        getRowFormatting={getRowFormatting}
+                        getCellFormatting={getCellFormatting}
                         renderHeaderExtra={
                             filterEnabled && !advancedFilters
                                 ? (col) => (

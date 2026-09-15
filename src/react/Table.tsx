@@ -1,8 +1,20 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
-import type { FieldTypeInfo, ParamFilter, SelectionColumnPosition, SortDirection } from './types.js';
+import type {
+    FieldTypeInfo,
+    FormattingRule,
+    GetCellFormatting,
+    GetRowFormatting,
+    ParamFilter,
+    SelectionColumnPosition,
+    SortDirection,
+} from './types.js';
 import { Cell } from './Cell.js';
-import { getRowId, selectionKey } from './utils.js';
+import { computeTableFormatting } from './formatting.js';
+import { columnNamesOf, getRowId, selectionKey } from './utils.js';
+
+/** Stable identity so the formatting memo isn't invalidated on every render. */
+const NO_RULES: FormattingRule[] = [];
 
 export interface TableProps<T extends Record<string, any>> {
     items: T[];
@@ -30,6 +42,12 @@ export interface TableProps<T extends Record<string, any>> {
     /** Labels for the checkboxes (accessibility). */
     selectAllLabel?: string;
     selectRowLabel?: string;
+    /** Conditional formatting rules, already merged and ordered (see useFormattingRules). */
+    formattingRules?: FormattingRule[];
+    /** Escape hatch for logic spanning several columns. Applied after every rule.
+     *  Wrap these in useCallback, or the formatting memo recomputes on each render. */
+    getRowFormatting?: GetRowFormatting<T>;
+    getCellFormatting?: GetCellFormatting<T>;
 }
 
 /**
@@ -56,16 +74,27 @@ export function Table<T extends Record<string, any>>({
     onToggleAllRows,
     selectAllLabel = 'Tout sélectionner',
     selectRowLabel = 'Sélectionner la ligne',
+    formattingRules,
+    getRowFormatting,
+    getCellFormatting,
 }: TableProps<T>) {
-    const columns = useMemo(
-        () => (items[0] ? Object.keys(items[0]) : paramFilter && paramFilter.length > 0 ? paramFilter.map((el) => el.nom) : []),
-        [items, paramFilter],
-    );
+    const columns = useMemo(() => columnNamesOf(items, paramFilter), [items, paramFilter]);
 
     /** Columns actually rendered, keeping their original index (fieldsType/paramFilter are indexed on it). */
     const visibleColumns = useMemo(
         () => columns.map((col, index) => ({ col, index })).filter(({ index }) => paramFilter?.[index]?.type.trim() !== 'HIDE'),
         [columns, paramFilter],
+    );
+
+    /**
+     * Computed for the whole page at once rather than inside the render loop: Table re-renders
+     * on every checkbox toggle and every filter popover open, and re-evaluating N rules over up
+     * to 1000 rows on each of those is wasteful. `items` gets a fresh identity on every load(),
+     * so invalidation is automatic. Returns null when there is nothing to format.
+     */
+    const formatting = useMemo(
+        () => computeTableFormatting(items, formattingRules ?? NO_RULES, columns, { getRowFormatting, getCellFormatting }),
+        [items, formattingRules, columns, getRowFormatting, getCellFormatting],
     );
 
     const selectedKeys = useMemo(() => new Set((selectedIds ?? []).map(selectionKey)), [selectedIds]);
@@ -138,13 +167,23 @@ export function Table<T extends Record<string, any>>({
                 )}
                 {items.map((row, i) => {
                     const id = getRowId(row);
-                    const cells = visibleColumns.map(({ col, index }) => (
-                        <td key={col}>
-                            <Cell value={row[col]} fieldType={fieldsType[index]?.fieldType} onImagePreview={onImagePreview} />
-                        </td>
-                    ));
+                    const fmt = formatting?.[i];
+                    const cells = visibleColumns.map(({ col, index }) => {
+                        // Keyed by column NAME. `index` stays positional for fieldsType/paramFilter —
+                        // using it here would mis-colour every table that has a HIDE column.
+                        const cf = fmt?.cellStyles[col];
+                        // The row style is re-applied as a base layer on each <td>: host CSS that sets a
+                        // background on td (zebra striping) paints over the <tr>'s own background otherwise.
+                        // Spreading the cell style second makes it win per property, with no JS arbitration.
+                        const style = fmt?.rowStyle || cf?.style ? { ...fmt?.rowStyle, ...cf?.style } : undefined;
+                        return (
+                            <td key={col} className={cf?.className} style={style}>
+                                <Cell value={row[col]} fieldType={fieldsType[index]?.fieldType} onImagePreview={onImagePreview} />
+                            </td>
+                        );
+                    });
                     const selectionCell = (
-                        <td key='__selection__' className='selectionColumn' onClick={(e) => e.stopPropagation()}>
+                        <td key='__selection__' className='selectionColumn' style={fmt?.rowStyle} onClick={(e) => e.stopPropagation()}>
                             <SelectionCheckbox
                                 checked={selectedKeys.has(selectionKey(id))}
                                 label={selectRowLabel}
@@ -155,7 +194,8 @@ export function Table<T extends Record<string, any>>({
                     return (
                         <tr
                             key={id !== undefined ? String(id) : i}
-                            style={{ cursor: onRowClick ? 'pointer' : 'default' }}
+                            className={fmt?.rowClassName}
+                            style={{ cursor: onRowClick ? 'pointer' : 'default', ...fmt?.rowStyle }}
                             onClick={() => id !== undefined && onRowClick?.(id, row)}
                         >
                             {withSelectionCell(cells, selectionCell)}

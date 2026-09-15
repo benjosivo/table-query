@@ -1,9 +1,9 @@
 import { Request, Response, Router } from 'express';
 import { connectionRollback, executeMySQLQuery, executeMySQLQuery2, executeMySQLQuery3 } from '@benjosivo/mysql';
 import { createHash, randomUUID } from 'crypto';
-import type { CacheDeps, ParamFilterType, ReqTableQueryOptions, TableQueryDeps } from './types.js';
+import type { CacheDeps, FormattingRuleInput, ParamFilterType, ReqTableQueryOptions, TableQueryDeps } from './types.js';
 
-export type { CacheDeps, ParamFilterType, ReqTableQueryOptions, TableQueryDeps } from './types.js';
+export type { CacheDeps, FormattingRuleInput, ParamFilterType, ReqTableQueryOptions, TableQueryDeps } from './types.js';
 
 /**
  * Creates the table-query module (router + query helpers) bound to this project's own
@@ -59,7 +59,7 @@ export function createTableQueryModule(deps: TableQueryDeps) {
     }
 
     async function reqTableQuery(opt: ReqTableQueryOptions) {
-        const { query, req, paramFilter, sort, argsQuery, keepCache = 5 * 60 * 1000 } = opt;
+        const { query, req, paramFilter, sort, argsQuery, formattingRules, keepCache = 5 * 60 * 1000 } = opt;
         if (!req.body && !req.query) {
             return { error: `req.query or req.body is missing`, status: 400 };
         }
@@ -80,11 +80,25 @@ export function createTableQueryModule(deps: TableQueryDeps) {
         // ── Paginated items ────────────────────────────────────────────────
         const itemsSql = `${query} ${whereClause} ORDER BY ${sorting} LIMIT ${limit < 0 ? 0 : limit} OFFSET ${offset < 0 ? 0 : offset}`;
         let { payload, status, error, empty } = await getDataFromQuery(itemsSql, argsQuery, cache ? keepCache : 0, cache);
+        // getDataFromQuery returns { status, error } with no payload when the query fails.
+        if (!payload) return { error, status };
         payload.paramFilter = paramFilter
             ? paramFilter.map((param, i) => {
                   return { nom: payload.fieldsType[i].fieldName, type: param };
               })
             : [];
+        // Forwarded untouched — formatting is presentation, it never reaches the SQL.
+        // Resolved by column NAME against the very same source `paramFilter` is zipped against,
+        // so the two can't drift. Sent on every request (a few hundred bytes), not gated behind
+        // setFilter, so the client needs no extra round-trip.
+        if (formattingRules?.length) {
+            const names = new Set((payload.fieldsType ?? []).map((f: any) => f.fieldName));
+            const kept = formattingRules.filter((r) => r && typeof r.column === 'string' && names.has(r.column));
+            const dropped = formattingRules.length - kept.length;
+            // A bad column name is a presentation mistake: warn, don't take the table down.
+            if (dropped) console.warn(`[table-query] ${dropped} règle(s) de mise en forme ignorée(s) : colonne inconnue.`);
+            payload.formattingRules = kept;
+        }
         if (empty) return { empty, data: payload };
         if (error && status) return { error, status };
         if (!reqInfo.setFilter) return { data: payload };

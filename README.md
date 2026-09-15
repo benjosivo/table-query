@@ -83,6 +83,24 @@ app.post('/api/commandes', wrapRouteHandler(async (req, res) => {
 | `'HIDE'` | Colonne sans filtre |
 | `null` | Colonne sans filtre particulier |
 
+### Règles de mise en forme (`formattingRules`)
+
+`reqTableQuery` peut transporter des règles de couleur jusqu'au client. Elles sont renvoyées **telles quelles** dans `payload.formattingRules` : le serveur ne les évalue jamais et elles ne touchent **jamais** au SQL.
+
+```js
+const { data } = await reqTableQuery({
+    query: `SELECT ...`,
+    req,
+    paramFilter: [null, 'MULTISELECT', 'SLIDER'],
+    formattingRules: [
+        { column: 'statut', operator: '=', value: 'en retard', style: { backgroundColor: '#ffd7d7' } },
+        { column: 'montant', operator: '>', value: 10000, target: 'cell', style: { fontWeight: 'bold' } },
+    ],
+});
+```
+
+Les règles sont indexées **par nom de colonne** (contrairement à `paramFilter`, qui est positionnel). Une règle dont la `column` ne correspond à aucune colonne de la requête est ignorée, avec un `console.warn` — jamais une erreur.
+
 ### Le cache (`useCache`)
 
 Le cache est activé **par appel**, pas globalement :
@@ -140,6 +158,14 @@ function CommandesTable() {
 | `selectionColumnPosition` | `number \| 'start' \| 'end'` (défaut `'start'`) | Position de la colonne de checkbox parmi les colonnes visibles |
 | `selectedIds` | `any[]` | Sélection contrôlée par le parent (voir plus bas) |
 | `onSelectionChange` | `(ids, rows) => void` | Appelée à chaque changement de sélection, avec les ids et les lignes complètes |
+| `formattingRules` | `FormattingRule[]` | Règles de mise en forme conditionnelle (voir « Mise en forme conditionnelle ») |
+| `getRowFormatting` | `(row, i) => {style?, className?}` | Échappatoire : style de ligne calculé en JS, appliqué après toutes les règles |
+| `getCellFormatting` | `(col, value, row, i) => {style?, className?}` | Idem, par cellule |
+| `formattingEditor` | `boolean` (défaut `false`) | Affiche le bouton « Mise en forme » pour l'utilisateur final |
+| `formattingStorageKey` | `string` | Sauvegarde les règles de l'utilisateur dans `localStorage` sous cette clé |
+| `onFormattingRulesChange` | `(rules) => void` | Appelée à chaque modification des règles de l'utilisateur |
+| `initialUserFormattingRules` | `FormattingRule[]` | Réhydrate les règles utilisateur depuis ton backend (prioritaire sur `localStorage`) |
+| `formattingButtonLabel` | `string` (défaut `'Mise en forme'`) | Libellé du bouton de la barre d'outils |
 
 ### Sélection de lignes (checkbox)
 
@@ -184,6 +210,122 @@ const supprimer = async () => {
     onSelectionChange={(ids) => setSelection(ids)}
 />
 ```
+
+### Mise en forme conditionnelle (couleurs)
+
+Colorer des lignes ou des cellules selon leurs valeurs, façon Excel. Les règles sont des objets **sérialisables** : elles peuvent être écrites en dur, stockées en base, ou renvoyées par l'API.
+
+```tsx
+<DataTable
+    fetchData={fetchCommandes}
+    formattingRules={[
+        // Toute la ligne en rouge pâle quand le statut vaut "en retard"
+        { column: 'statut', operator: '=', value: 'en retard', style: { backgroundColor: '#ffd7d7' } },
+        // Seulement la cellule "montant" en gras vert au-dessus de 10 000
+        { column: 'montant', operator: '>', value: 10000, target: 'cell', style: { color: '#0a7d32', fontWeight: 'bold' } },
+        // Deux colonnes précises, via une classe CSS de ton app
+        { column: 'livraison', operator: 'isNull', target: ['livraison', 'transporteur'], className: 'a-completer' },
+    ]}
+/>
+```
+
+La librairie ne livre **aucun CSS** : `style` (inline) fonctionne sans configuration, `className` suppose que ton app définit la classe.
+
+#### Écrire une règle (`FormattingRule`)
+
+| Champ | Type | Description |
+|---|---|---|
+| `column` | `string` | **Obligatoire.** Nom de la colonne testée (une clé des objets de `items`) |
+| `operator` | voir table ci-dessous | **Obligatoire.** |
+| `value` | `any` | L'opérande ; sa forme dépend de l'opérateur |
+| `target` | `'row' \| 'cell' \| string[]` | Ce qui est coloré. Défaut `'row'` |
+| `style` | `CSSProperties` | Style inline appliqué au `<tr>` ou au `<td>` |
+| `className` | `string` | Classe CSS ajoutée au `<tr>` ou au `<td>` |
+| `valueType` | `'auto' \| 'string' \| 'number' \| 'date' \| 'boolean'` | Force le mode de comparaison. Défaut `'auto'` |
+| `stopIfTrue` | `boolean` | Arrête les règles suivantes sur ce que cette règle a coloré |
+| `enabled` | `boolean` | `false` conserve la règle sans l'appliquer. Défaut `true` |
+| `label` | `string` | Libellé affiché dans l'éditeur |
+| `id` | `string` | Généré automatiquement si absent |
+
+| Opérateur | Opérande |
+|---|---|
+| `=` `!=` `<` `<=` `>` `>=` | une valeur |
+| `between` | `[min, max]` ou `{min, max}` — **bornes incluses**, inversées tolérées |
+| `in` | un tableau, ou une chaîne `"a, b, c"` |
+| `contains` `notContains` `startsWith` `endsWith` | une valeur (toujours comparée en texte) |
+| `isNull` `isNotNull` | aucune |
+
+#### Cible d'une règle (`target`)
+
+- `'row'` (défaut) → le `<tr>` entier.
+- `'cell'` → seulement la cellule de la colonne testée.
+- `['col_a', 'col_b']` → ces colonnes-là.
+
+Le style de ligne est **aussi** posé sur chaque `<td>`. Sans cela, le moindre CSS de ton app sur `td` (zébrage, `tbody td { background: #fff }`) recouvrirait le fond du `<tr>` et la couleur semblerait ne pas marcher. Une règle `'cell'` est étalée **par-dessus**, elle l'emporte donc propriété par propriété.
+
+Les `className`, eux, ne descendent **pas** sur les `<td>` : une classe de ligne est un point d'accroche pour ton propre CSS, écris `tr.ma-classe td { ... }`.
+
+#### Ordre, fusion et `stopIfTrue`
+
+Les règles sont évaluées **dans l'ordre**, et cet ordre **est** la priorité :
+
+1. `formattingRules` (props de ton app)
+2. les règles renvoyées par l'API
+3. les règles créées par l'utilisateur dans l'éditeur
+
+Les styles se **cumulent** ; sur une même propriété CSS, **la dernière règle gagne**. Deux règles peuvent donc apporter l'une le fond, l'autre le gras.
+
+`stopIfTrue` gèle exactement ce que la règle a coloré : posé sur une règle `'row'`, il bloque les règles `'row'` suivantes mais **pas** les règles `'cell'` ; posé sur une règle `'cell'`, il ne gèle que cette cellule.
+
+#### Comparaison des valeurs
+
+Les valeurs viennent de MySQL : un `DECIMAL` arrive en chaîne, une `DATE` en objet `Date`. En mode `'auto'`, la comparaison essaie dans cet ordre : **date** (si un `Date` est en jeu) → **nombre** (si les deux côtés sont numériques) → **date ISO** → **texte**.
+
+- Le texte est comparé **sans tenir compte de la casse**.
+- `'007'` et `'7'` sont **égaux** en mode auto (comparaison numérique). Pour une référence ou un code postal, mets `valueType: 'string'`.
+- `'2024'` est traité comme un **nombre**, pas comme une année.
+- Une valeur `'YYYY-MM-DD'` désigne le **jour entier** : `= '2024-01-05'` matche un `DATETIME` du 5 à 14h32, et `between` inclut toute la journée de fin.
+
+**Valeurs nulles** : `isNull` matche `null`, `undefined` et la chaîne vide ; `!=` et `notContains` matchent sur une valeur nulle ; **tous les autres opérateurs ne matchent jamais** sur `null`. Une règle visant une colonne **inexistante** ne matche rien du tout (y compris `isNull`).
+
+#### Échappatoire : `getRowFormatting` / `getCellFormatting`
+
+Pour une logique qui croise plusieurs colonnes, hors de portée d'une règle déclarative :
+
+```tsx
+const getRowFormatting = useCallback(
+    (row) => (row.livree > row.commandee ? { style: { backgroundColor: '#ffe6e6' } } : null),
+    [],
+);
+
+<DataTable fetchData={fetchCommandes} getRowFormatting={getRowFormatting} />
+```
+
+Ces callbacks sont appliqués **en dernier** et ignorent `stopIfTrue` — ils l'emportent toujours. **Enveloppe-les dans `useCallback`**, sinon le calcul des couleurs est refait à chaque rendu.
+
+#### L'éditeur pour l'utilisateur final (`formattingEditor`)
+
+Désactivé par défaut. Avec `formattingEditor`, un bouton « Mise en forme » apparaît au-dessus du tableau et ouvre une modale où l'utilisateur ajoute, réordonne, désactive et supprime ses propres règles.
+
+```tsx
+<DataTable
+    fetchData={fetchCommandes}
+    formattingEditor
+    formattingStorageKey='commandes'            // persistance locale, gérée par la lib
+    onFormattingRulesChange={(rules) => save(rules)}  // ou ta propre persistance serveur
+    initialUserFormattingRules={reglesDeMonBackend}   // prioritaire sur localStorage
+/>
+```
+
+- `formattingStorageKey` écrit sous la clé réelle `tableQuery:formatting:<clé>`, au format `{"v":1,"rules":[...],"disabled":[...]}`. Tout accès au stockage est protégé (SSR, navigation privée, quota dépassé) et une version inconnue est ignorée.
+- L'utilisateur n'édite que **sa** couche. Les règles venues des props et de l'API s'affichent en lecture seule, avec une case pour les désactiver.
+- Sans `formattingEditor`, aucun nœud supplémentaire n'est ajouté au DOM.
+
+#### Limites connues
+
+- Sur une colonne `JSON`, la coloration du texte peut sembler sans effet : le rendu JSON pose ses propres `<span class="key|string|number">`, et le CSS de ton app sur ces classes l'emporte sur la couleur héritée du `<td>`. Le fond, lui, fonctionne.
+- Sur une colonne `FILE`/`BLOB`, le contenu est un `<img>` ou un `<button>` : le fond s'affiche autour, mais la couleur du texte est écrasée par le style de tes boutons.
+- Une règle visant une colonne masquée (`HIDE`) est bien évaluée, mais une cible `'cell'` sur cette colonne n'a aucun effet visible.
 
 ### Utilisation avec ta propre UI de filtre
 
