@@ -136,13 +136,18 @@ export function createTableQueryModule(deps: TableQueryDeps) {
             if (tableValues.length === 0) return { empty: true, payload: { items: tableValues, count: 0, fieldsType: reqRows.fieldsType } };
 
             Object.keys(tableValues[0]).forEach((col: any, i: number) => {
-                if (col === 'Documents') reqRows.fieldsType[i].fieldType = 'FILE';
+                if (col.toLowerCase().trim() === 'documents') reqRows.fieldsType[i].fieldType = 'FILE';
             });
 
             payload = { items: tableValues, count: reqRows.rows[0]?.TotalCount ?? 0, fieldsType: reqRows.fieldsType };
 
             if (cache && keepCache) {
-                await cache.setSQLCache(titleSQLCacheQuery, { title: titleSQLCacheQuery, data: payload, expiration: Date.now() + keepCache });
+                await cache.setSQLCache(titleSQLCacheQuery, {
+                    title: titleSQLCacheQuery,
+                    data: payload,
+                    expiration: Date.now() + keepCache,
+                    tables: reqRows.tables,
+                });
             }
         }
         return { payload };
