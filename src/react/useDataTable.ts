@@ -11,9 +11,17 @@ export function useDataTable<T extends Record<string, any>>({
     fetchFilterConfig,
     selectedIds: controlledSelectedIds,
     onSelectionChange,
+    defaultFilters,
 }: Pick<
     DataTableProps<T>,
-    'fetchData' | 'advancedFilters' | 'rowsPerPageOptions' | 'defaultRowsPerPage' | 'fetchFilterConfig' | 'selectedIds' | 'onSelectionChange'
+    | 'fetchData'
+    | 'advancedFilters'
+    | 'rowsPerPageOptions'
+    | 'defaultRowsPerPage'
+    | 'fetchFilterConfig'
+    | 'selectedIds'
+    | 'onSelectionChange'
+    | 'defaultFilters'
 >) {
     const [items, setItems] = useState<T[]>([]);
     const [count, setCount] = useState(0);
@@ -25,7 +33,7 @@ export function useDataTable<T extends Record<string, any>>({
     const [perPage, setPerPage] = useState(defaultRowsPerPage);
     const [sortColumn, setSortColumn] = useState<string>('');
     const [sortDirection, setSortDirection] = useState<SortDirection>('ASC');
-    const [filters, setFilters] = useState<Record<string, unknown>>({});
+    const [filters, setFilters] = useState<Record<string, unknown>>(defaultFilters ? defaultFilters : {});
 
     const [filterConfig, setFilterConfig] = useState<FilterConfig | null>(null);
     const [cleRecupFiltre, setCleRecupFiltre] = useState<string | undefined>();
@@ -139,7 +147,23 @@ export function useDataTable<T extends Record<string, any>>({
 
     /** Replace the whole filter object at once — handy for a custom search UI that
      * doesn't reason "per column" and just wants to hand over its own `filtre` payload. */
-    const replaceFilters = useCallback((next: Record<string, unknown>) => setFilters(next), []);
+    const replaceFilters = useCallback(
+        (next: Record<string, unknown>) =>
+            setFilters((previous) => {
+                const previousKeys = Object.keys(previous);
+                const nextKeys = Object.keys(next);
+
+                if (
+                    previousKeys.length === nextKeys.length &&
+                    previousKeys.every((key) => JSON.stringify(previous[key]) === JSON.stringify(next[key]))
+                ) {
+                    return previous;
+                }
+
+                return next;
+            }),
+        [],
+    );
 
     // ==================== SELECTION ====================
 

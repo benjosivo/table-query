@@ -122,6 +122,8 @@ export interface DataTableProps<T extends Record<string, any>> {
     onRowClick?: (id: any, row: T) => void;
     /** Enable the per-column quick filter button (magnifier icon) in the header. Default true. */
     filterEnabled?: boolean;
+    /*filtres appliqué par defaut à la premiere requetes de la table*/
+    defaultFilters?: Record<string, unknown>;
     /** Enable click-to-sort on column headers. Default true. */
     sortingEnabled?: boolean;
     /** Enable the advanced filter side panel (multiselect / slider / date), driven by fieldsType.filtre. Default false. */
