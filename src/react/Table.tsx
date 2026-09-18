@@ -99,10 +99,7 @@ export function Table<T extends Record<string, any>>({
 
     const selectedKeys = useMemo(() => new Set((selectedIds ?? []).map(selectionKey)), [selectedIds]);
     const displayedCount = items.length;
-    const selectedOnPage = useMemo(
-        () => items.filter((row) => selectedKeys.has(selectionKey(getRowId(row)))).length,
-        [items, selectedKeys],
-    );
+    const selectedOnPage = useMemo(() => items.filter((row) => selectedKeys.has(selectionKey(getRowId(row)))).length, [items, selectedKeys]);
     const allDisplayedSelected = displayedCount > 0 && selectedOnPage === displayedCount;
     const someDisplayedSelected = selectedOnPage > 0 && !allDisplayedSelected;
 
@@ -110,8 +107,7 @@ export function Table<T extends Record<string, any>>({
     const selectionIndex = useMemo(() => {
         if (!selectable) return -1;
         if (selectionColumnPosition === 'end') return visibleColumns.length;
-        if (typeof selectionColumnPosition === 'number')
-            return Math.min(Math.max(0, Math.trunc(selectionColumnPosition)), visibleColumns.length);
+        if (typeof selectionColumnPosition === 'number') return Math.min(Math.max(0, Math.trunc(selectionColumnPosition)), visibleColumns.length);
         return 0;
     }, [selectable, selectionColumnPosition, visibleColumns.length]);
 
@@ -132,9 +128,7 @@ export function Table<T extends Record<string, any>>({
                 >
                     <span translate='yes'>{col}</span>
                     {sortingEnabled && (
-                        <span className='sort-icon'>
-                            {sortColumn === col ? (sortDirection === 'ASC' ? '\u2B06' : '\u2B07') : '\u2B07\u2B06'}
-                        </span>
+                        <span className='sort-icon'>{sortColumn === col ? (sortDirection === 'ASC' ? '\u2B06' : '\u2B07') : '\u2B07\u2B06'}</span>
                     )}
                 </div>
                 {renderHeaderExtra?.(col)}
@@ -169,21 +163,15 @@ export function Table<T extends Record<string, any>>({
                     const id = getRowId(row);
                     const fmt = formatting?.[i];
                     const cells = visibleColumns.map(({ col, index }) => {
-                        // Keyed by column NAME. `index` stays positional for fieldsType/paramFilter —
-                        // using it here would mis-colour every table that has a HIDE column.
                         const cf = fmt?.cellStyles[col];
-                        // The row style is re-applied as a base layer on each <td>: host CSS that sets a
-                        // background on td (zebra striping) paints over the <tr>'s own background otherwise.
-                        // Spreading the cell style second makes it win per property, with no JS arbitration.
-                        const style = fmt?.rowStyle || cf?.style ? { ...fmt?.rowStyle, ...cf?.style } : undefined;
                         return (
-                            <td key={col} className={cf?.className} style={style}>
+                            <td key={col} className={cf?.className} style={cf?.style}>
                                 <Cell value={row[col]} fieldType={fieldsType[index]?.fieldType} onImagePreview={onImagePreview} />
                             </td>
                         );
                     });
                     const selectionCell = (
-                        <td key='__selection__' className='selectionColumn' style={fmt?.rowStyle} onClick={(e) => e.stopPropagation()}>
+                        <td key='__selection__' className='selectionColumn' onClick={(e) => e.stopPropagation()}>
                             <SelectionCheckbox
                                 checked={selectedKeys.has(selectionKey(id))}
                                 label={selectRowLabel}
