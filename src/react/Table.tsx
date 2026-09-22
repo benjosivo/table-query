@@ -177,7 +177,7 @@ export function Table<T extends Record<string, any>>({
                         // Spreading the cell style second makes it win per property, with no JS arbitration.
                         const style = fmt?.rowStyle || cf?.style ? { ...fmt?.rowStyle, ...cf?.style } : undefined;
                         return (
-                            <td key={col} className={cf?.className} style={style}>
+                            <td key={col} className={cf?.className} style={style} title={cf?.title}>
                                 <Cell value={row[col]} fieldType={fieldsType[index]?.fieldType} onImagePreview={onImagePreview} />
                             </td>
                         );
@@ -196,6 +196,7 @@ export function Table<T extends Record<string, any>>({
                             key={id !== undefined ? String(id) : i}
                             className={fmt?.rowClassName}
                             style={{ cursor: onRowClick ? 'pointer' : 'default', ...fmt?.rowStyle }}
+                            title={fmt?.rowTitle}
                             onClick={() => id !== undefined && onRowClick?.(id, row)}
                         >
                             {withSelectionCell(cells, selectionCell)}

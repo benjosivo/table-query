@@ -7,6 +7,7 @@
 import type { CSSProperties } from 'react';
 import type {
     CellFormatting,
+    FormattingCondition,
     FormattingOperator,
     FormattingRule,
     FormattingValueType,
@@ -169,25 +170,25 @@ function asList(value: unknown): unknown[] {
 
 // ==================== RULE EVALUATION ====================
 
-export function evaluateRule(rule: FormattingRule, row: Record<string, any>): boolean {
+function evaluateCondition(condition: FormattingCondition, row: Record<string, any>): boolean {
     // Guard on key presence, NOT on `row[col] === undefined`. A typo'd column must never
     // match anything — otherwise `isNull` would repaint the entire table.
-    if (!rule || typeof rule.column !== 'string' || !(rule.column in row)) return false;
+    if (!condition || typeof condition.column !== 'string' || !(condition.column in row)) return false;
 
-    const cell = row[rule.column];
-    const vt = rule.valueType ?? 'auto';
+    const cell = row[condition.column];
+    const vt = condition.valueType ?? 'auto';
 
     // Operators with their own null semantics come first.
-    switch (rule.operator) {
+    switch (condition.operator) {
         case 'isNull':
             return isBlank(cell) || String(cell).trim() === '';
         case 'isNotNull':
             return !isBlank(cell) && String(cell).trim() !== '';
         case 'notContains':
-            return isBlank(cell) ? true : !toText(cell).includes(toText(rule.value));
+            return isBlank(cell) ? true : !toText(cell).includes(toText(condition.value));
         case '!=': {
-            if (isBlank(cell)) return !isBlank(rule.value);
-            const c = compareValues(cell, rule.value, vt);
+            if (isBlank(cell)) return !isBlank(condition.value);
+            const c = compareValues(cell, condition.value, vt);
             return c === null ? true : c !== 0;
         }
     }
@@ -195,28 +196,28 @@ export function evaluateRule(rule: FormattingRule, row: Record<string, any>): bo
     // Every remaining operator is false on a NULL cell.
     if (isBlank(cell)) return false;
 
-    switch (rule.operator) {
+    switch (condition.operator) {
         case '=': {
-            return compareValues(cell, rule.value, vt) === 0;
+            return compareValues(cell, condition.value, vt) === 0;
         }
         case '<': {
-            const c = compareValues(cell, rule.value, vt);
+            const c = compareValues(cell, condition.value, vt);
             return c !== null && c < 0;
         }
         case '<=': {
-            const c = compareValues(cell, rule.value, vt);
+            const c = compareValues(cell, condition.value, vt);
             return c !== null && c <= 0;
         }
         case '>': {
-            const c = compareValues(cell, rule.value, vt);
+            const c = compareValues(cell, condition.value, vt);
             return c !== null && c > 0;
         }
         case '>=': {
-            const c = compareValues(cell, rule.value, vt);
+            const c = compareValues(cell, condition.value, vt);
             return c !== null && c >= 0;
         }
         case 'between': {
-            let [lo, hi] = asPair(rule.value);
+            let [lo, hi] = asPair(condition.value);
             if (lo === undefined || hi === undefined) return false;
             // Tolerate swapped bounds rather than silently matching nothing.
             if ((compareValues(lo, hi, vt) ?? 0) > 0) [lo, hi] = [hi, lo];
@@ -225,16 +226,29 @@ export function evaluateRule(rule: FormattingRule, row: Record<string, any>): bo
             return a !== null && b !== null && a >= 0 && b <= 0;
         }
         case 'in': {
-            return asList(rule.value).some((v) => compareValues(cell, v, vt) === 0);
+            return asList(condition.value).some((v) => compareValues(cell, v, vt) === 0);
         }
         case 'contains':
-            return toText(cell).includes(toText(rule.value));
+            return toText(cell).includes(toText(condition.value));
         case 'startsWith':
-            return toText(cell).startsWith(toText(rule.value));
+            return toText(cell).startsWith(toText(condition.value));
         case 'endsWith':
-            return toText(cell).endsWith(toText(rule.value));
+            return toText(cell).endsWith(toText(condition.value));
     }
     return false;
+}
+
+/**
+ * A rule matches when its primary condition (column/operator/value) matches, combined with
+ * its extra `conditions` (if any) via `conditionLogic` (default 'AND'). No `conditions` = the
+ * rule behaves exactly as a single-condition rule always did.
+ */
+export function evaluateRule(rule: FormattingRule, row: Record<string, any>): boolean {
+    const primary = evaluateCondition(rule, row);
+    if (!rule.conditions?.length) return primary;
+    return rule.conditionLogic === 'OR'
+        ? primary || rule.conditions.some((c) => evaluateCondition(c, row))
+        : primary && rule.conditions.every((c) => evaluateCondition(c, row));
 }
 
 // ==================== MERGE ====================
@@ -245,6 +259,13 @@ function joinClass(a: string | undefined, b: string | undefined): string | undef
     const seen = new Set(a.split(/\s+/).filter(Boolean));
     for (const c of b.split(/\s+/).filter(Boolean)) seen.add(c);
     return Array.from(seen).join(' ');
+}
+
+/** Unlike style (last wins) or className (word set), a title is a human message: concatenate. */
+function joinTitle(a: string | undefined, b: string | undefined): string | undefined {
+    if (!a) return b || undefined;
+    if (!b) return a;
+    return a === b ? a : `${a}\n${b}`;
 }
 
 /** null = the "row" bucket; otherwise the column names this rule paints. */
@@ -265,6 +286,7 @@ export function computeRowFormatting<T extends Record<string, any>>(
 ): RowFormatting {
     let rowStyle: CSSProperties | undefined;
     let rowClassName: string | undefined;
+    let rowTitle: string | undefined;
     const cellStyles: Record<string, CellFormatting> = {};
     const columnSet = new Set(columns);
 
@@ -289,6 +311,7 @@ export function computeRowFormatting<T extends Record<string, any>>(
             // Later rule wins per CSS property.
             if (rule.style) rowStyle = { ...rowStyle, ...rule.style };
             rowClassName = joinClass(rowClassName, rule.className);
+            rowTitle = joinTitle(rowTitle, rule.title);
             if (rule.stopIfTrue) rowStopped = true;
         } else {
             for (const col of targets) {
@@ -297,6 +320,7 @@ export function computeRowFormatting<T extends Record<string, any>>(
                 cellStyles[col] = {
                     style: rule.style ? { ...prev?.style, ...rule.style } : prev?.style,
                     className: joinClass(prev?.className, rule.className),
+                    title: joinTitle(prev?.title, rule.title),
                 };
                 if (rule.stopIfTrue) stoppedCells.add(col);
             }
@@ -309,6 +333,7 @@ export function computeRowFormatting<T extends Record<string, any>>(
     if (fromRowCb) {
         if (fromRowCb.style) rowStyle = { ...rowStyle, ...fromRowCb.style };
         rowClassName = joinClass(rowClassName, fromRowCb.className);
+        rowTitle = joinTitle(rowTitle, fromRowCb.title);
     }
     if (callbacks?.getCellFormatting) {
         for (const col of columns) {
@@ -318,11 +343,12 @@ export function computeRowFormatting<T extends Record<string, any>>(
             cellStyles[col] = {
                 style: fromCellCb.style ? { ...prev?.style, ...fromCellCb.style } : prev?.style,
                 className: joinClass(prev?.className, fromCellCb.className),
+                title: joinTitle(prev?.title, fromCellCb.title),
             };
         }
     }
 
-    return { rowStyle, rowClassName, cellStyles };
+    return { rowStyle, rowClassName, rowTitle, cellStyles };
 }
 
 /**
@@ -359,6 +385,22 @@ function sanitizeStyle(input: unknown): CSSProperties | undefined {
     return Object.keys(out).length ? (out as CSSProperties) : undefined;
 }
 
+function sanitizeCondition(raw: unknown): FormattingCondition | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const r = raw as Record<string, unknown>;
+    if (typeof r.column !== 'string' || !r.column) return null;
+    if (typeof r.operator !== 'string' || !OPERATOR_SET.has(r.operator)) return null;
+    return {
+        column: r.column,
+        operator: r.operator as FormattingOperator,
+        value: r.value,
+        valueType:
+            r.valueType === 'string' || r.valueType === 'number' || r.valueType === 'date' || r.valueType === 'boolean'
+                ? r.valueType
+                : 'auto',
+    };
+}
+
 /**
  * Coerce an untrusted rule list (an API payload or localStorage) into valid rules.
  * Anything malformed is dropped, never thrown on — a bad stored rule must not take the
@@ -370,26 +412,27 @@ export function sanitizeFormattingRules(input: unknown): FormattingRule[] {
     for (const raw of input) {
         if (!raw || typeof raw !== 'object') continue;
         const r = raw as Record<string, unknown>;
-        if (typeof r.column !== 'string' || !r.column) continue;
-        if (typeof r.operator !== 'string' || !OPERATOR_SET.has(r.operator)) continue;
+        const primary = sanitizeCondition(r);
+        if (!primary) continue;
 
         let target: FormattingRule['target'] = 'row';
         if (r.target === 'cell' || r.target === 'row') target = r.target;
         else if (Array.isArray(r.target)) target = r.target.filter((c): c is string => typeof c === 'string');
 
+        const conditions = Array.isArray(r.conditions)
+            ? r.conditions.map(sanitizeCondition).filter((c): c is FormattingCondition => c !== null)
+            : [];
+
         out.push({
+            ...primary,
             id: typeof r.id === 'string' && r.id ? r.id : newRuleId(),
             label: typeof r.label === 'string' ? r.label : undefined,
-            column: r.column,
-            operator: r.operator as FormattingOperator,
-            value: r.value,
-            valueType:
-                r.valueType === 'string' || r.valueType === 'number' || r.valueType === 'date' || r.valueType === 'boolean'
-                    ? r.valueType
-                    : 'auto',
+            conditions: conditions.length ? conditions : undefined,
+            conditionLogic: conditions.length ? (r.conditionLogic === 'OR' ? 'OR' : 'AND') : undefined,
             target,
             style: sanitizeStyle(r.style),
             className: typeof r.className === 'string' ? r.className : undefined,
+            title: typeof r.title === 'string' ? r.title : undefined,
             stopIfTrue: r.stopIfTrue === true,
             enabled: r.enabled !== false,
         });
@@ -428,19 +471,25 @@ export function editorStateToStyle(state: RuleStyleState): CSSProperties | undef
     return Object.keys(style).length ? (style as CSSProperties) : undefined;
 }
 
-/** Human-readable one-liner for a rule, used when it carries no explicit label. */
-export function describeRule(rule: FormattingRule): string {
-    const op = FORMATTING_OPERATORS.find((o) => o.value === rule.operator);
+function describeCondition(condition: FormattingCondition): string {
+    const op = FORMATTING_OPERATORS.find((o) => o.value === condition.operator);
     const arity = op?.arity ?? 1;
     let operand = '';
     if (arity === 2) {
-        const [lo, hi] = asPair(rule.value);
+        const [lo, hi] = asPair(condition.value);
         operand = ` ${String(lo ?? '')} et ${String(hi ?? '')}`;
     } else if (arity === 'n') {
-        operand = ` ${asList(rule.value).join(', ')}`;
+        operand = ` ${asList(condition.value).join(', ')}`;
     } else if (arity === 1) {
-        operand = ` ${String(rule.value ?? '')}`;
+        operand = ` ${String(condition.value ?? '')}`;
     }
+    return `${condition.column} ${op?.label.split(' ')[0] ?? condition.operator}${operand}`;
+}
+
+/** Human-readable one-liner for a rule, used when it carries no explicit label. */
+export function describeRule(rule: FormattingRule): string {
+    const joiner = rule.conditionLogic === 'OR' ? ' OU ' : ' ET ';
+    const conditionText = [rule, ...(rule.conditions ?? [])].map(describeCondition).join(joiner);
     const target = rule.target === 'cell' ? 'cellule' : Array.isArray(rule.target) ? rule.target.join(', ') : 'ligne';
-    return `${rule.column} ${op?.label.split(' ')[0] ?? rule.operator}${operand} → ${target}`;
+    return `${conditionText} → ${target}`;
 }

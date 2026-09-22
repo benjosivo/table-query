@@ -99,7 +99,7 @@ const { data } = await reqTableQuery({
 });
 ```
 
-Les règles sont indexées **par nom de colonne** (contrairement à `paramFilter`, qui est positionnel). Une règle dont la `column` ne correspond à aucune colonne de la requête est ignorée, avec un `console.warn` — jamais une erreur.
+Les règles sont indexées **par nom de colonne** (contrairement à `paramFilter`, qui est positionnel). Une règle dont la `column` — ou celle d'une des `conditions` supplémentaires — ne correspond à aucune colonne de la requête est ignorée en entier, avec un `console.warn` — jamais une erreur.
 
 ### Le cache (`useCache`)
 
@@ -225,6 +225,15 @@ Colorer des lignes ou des cellules selon leurs valeurs, façon Excel. Les règle
         { column: 'montant', operator: '>', value: 10000, target: 'cell', style: { color: '#0a7d32', fontWeight: 'bold' } },
         // Deux colonnes précises, via une classe CSS de ton app
         { column: 'livraison', operator: 'isNull', target: ['livraison', 'transporteur'], className: 'a-completer' },
+        // Plusieurs colonnes DANS la condition : en retard ET montant élevé, avec une info-bulle
+        {
+            column: 'statut',
+            operator: '=',
+            value: 'en retard',
+            conditions: [{ column: 'montant', operator: '>', value: 10000 }],
+            style: { backgroundColor: '#c0392b', color: 'white' },
+            title: 'En retard et montant élevé',
+        },
     ]}
 />
 ```
@@ -235,12 +244,15 @@ La librairie ne livre **aucun CSS** : `style` (inline) fonctionne sans configura
 
 | Champ | Type | Description |
 |---|---|---|
-| `column` | `string` | **Obligatoire.** Nom de la colonne testée (une clé des objets de `items`) |
+| `column` | `string` | **Obligatoire.** Nom de la colonne testée par la condition principale (une clé des objets de `items`) |
 | `operator` | voir table ci-dessous | **Obligatoire.** |
 | `value` | `any` | L'opérande ; sa forme dépend de l'opérateur |
-| `target` | `'row' \| 'cell' \| string[]` | Ce qui est coloré. Défaut `'row'` |
+| `conditions` | `FormattingCondition[]` | Conditions supplémentaires (`{ column, operator, value?, valueType? }`), combinées avec la condition principale via `conditionLogic` |
+| `conditionLogic` | `'AND' \| 'OR'` | Comment `conditions` se combine à la condition principale. Défaut `'AND'` |
+| `target` | `'row' \| 'cell' \| string[]` | Ce qui est coloré. Défaut `'row'`. `'cell'` désigne toujours la colonne de la condition **principale**, quel que soit le nombre de `conditions` |
 | `style` | `CSSProperties` | Style inline appliqué au `<tr>` ou au `<td>` |
 | `className` | `string` | Classe CSS ajoutée au `<tr>` ou au `<td>` |
+| `title` | `string` | Attribut HTML `title` (info-bulle native) posé sur le `<tr>` ou le `<td>` quand la règle matche |
 | `valueType` | `'auto' \| 'string' \| 'number' \| 'date' \| 'boolean'` | Force le mode de comparaison. Défaut `'auto'` |
 | `stopIfTrue` | `boolean` | Arrête les règles suivantes sur ce que cette règle a coloré |
 | `enabled` | `boolean` | `false` conserve la règle sans l'appliquer. Défaut `true` |
@@ -265,6 +277,22 @@ Le style de ligne est **aussi** posé sur chaque `<td>`. Sans cela, le moindre C
 
 Les `className`, eux, ne descendent **pas** sur les `<td>` : une classe de ligne est un point d'accroche pour ton propre CSS, écris `tr.ma-classe td { ... }`.
 
+#### Conditions multiples (`conditions`, `conditionLogic`)
+
+Une règle peut tester **plusieurs colonnes à la fois** avant de colorer, indépendamment de ce qu'elle colore (`target`) :
+
+```tsx
+{
+    column: 'age', operator: '>', value: 18,
+    conditions: [{ column: 'statut', operator: '=', value: 'actif' }],
+    conditionLogic: 'AND', // défaut — 'OR' matche si au moins une condition est vraie
+    target: 'row',
+    style: { backgroundColor: '#eaffea' },
+}
+```
+
+`conditions` est une liste **plate** (pas de groupes imbriqués ET-de-OU) combinée à la condition principale (`column`/`operator`/`value`) par un seul `conditionLogic`. Une règle sans `conditions` se comporte exactement comme avant.
+
 #### Ordre, fusion et `stopIfTrue`
 
 Les règles sont évaluées **dans l'ordre**, et cet ordre **est** la priorité :
@@ -288,6 +316,12 @@ Les valeurs viennent de MySQL : un `DECIMAL` arrive en chaîne, une `DATE` en ob
 
 **Valeurs nulles** : `isNull` matche `null`, `undefined` et la chaîne vide ; `!=` et `notContains` matchent sur une valeur nulle ; **tous les autres opérateurs ne matchent jamais** sur `null`. Une règle visant une colonne **inexistante** ne matche rien du tout (y compris `isNull`).
 
+#### Message d'info-bulle (`title`)
+
+Quand une règle matche, son `title` (s'il est défini) est posé comme attribut HTML natif sur le `<tr>` (ou le `<td>` pour une cible `'cell'`/colonnes choisies) — l'utilisateur final voit *pourquoi* c'est coloré au survol, sans ouvrir l'éditeur. Plusieurs règles qui matchent le même élément **concatènent** leurs messages (séparés par un saut de ligne) plutôt que de s'écraser.
+
+Pas besoin de répéter le message sur chaque cellule : l'attribut `title` **s'hérite nativement** en HTML, un `<td>` sans son propre `title` affiche celui de son `<tr>` au survol. Une cellule avec sa propre règle `'cell'`/`title` affiche le sien à la place, exactement comme son style l'emporte sur celui de la ligne.
+
 #### Échappatoire : `getRowFormatting` / `getCellFormatting`
 
 Pour une logique qui croise plusieurs colonnes, hors de portée d'une règle déclarative :
@@ -305,7 +339,7 @@ Ces callbacks sont appliqués **en dernier** et ignorent `stopIfTrue` — ils l'
 
 #### L'éditeur pour l'utilisateur final (`formattingEditor`)
 
-Désactivé par défaut. Avec `formattingEditor`, un bouton « Mise en forme » apparaît au-dessus du tableau et ouvre une modale où l'utilisateur ajoute, réordonne, désactive et supprime ses propres règles.
+Désactivé par défaut. Avec `formattingEditor`, un bouton « Mise en forme » apparaît au-dessus du tableau et ouvre une modale où l'utilisateur ajoute, réordonne, désactive et supprime ses propres règles. Chaque règle peut recevoir des conditions supplémentaires (bouton « + Ajouter une condition », combinées en ET/OU) et un message d'info-bulle (« Message (info-bulle) »).
 
 ```tsx
 <DataTable

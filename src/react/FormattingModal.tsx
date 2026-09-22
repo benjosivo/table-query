@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FieldTypeInfo, FormattingRule, FormattingTarget, FormattingValueType, ParamFilter } from './types.js';
+import type { FieldTypeInfo, FormattingCondition, FormattingRule, FormattingTarget, FormattingValueType, ParamFilter } from './types.js';
 import type { UseFormattingRulesResult } from './useFormattingRules.js';
 import {
     FORMATTING_OPERATORS,
@@ -218,41 +218,32 @@ function inputTypeFor(fieldType: string | undefined): string {
     return 'text';
 }
 
-function RuleEditor({
-    rule,
+/** Column + operator + operand(s) + comparison type for one condition — shared by the primary condition and every extra one. */
+function ConditionFields({
+    condition,
     columns,
     hiddenColumns,
     fieldsType,
     onChange,
-    onDone,
 }: {
-    rule: FormattingRule;
+    condition: FormattingCondition;
     columns: string[];
     hiddenColumns: Set<string>;
     fieldsType?: FieldTypeInfo[];
-    onChange: (patch: Partial<FormattingRule>) => void;
-    onDone: () => void;
+    onChange: (patch: Partial<FormattingCondition>) => void;
 }) {
-    const arity = operatorArity(rule.operator);
-    const styleState = styleToEditorState(rule.style);
-    const columnIndex = columns.indexOf(rule.column);
+    const arity = operatorArity(condition.operator);
+    const columnIndex = columns.indexOf(condition.column);
     const inputType = inputTypeFor(fieldsType?.[columnIndex]?.fieldType);
-
-    const setStyle = (patch: Partial<ReturnType<typeof styleToEditorState>>) =>
-        onChange({ style: editorStateToStyle({ ...styleState, ...patch }) });
-
-    const pair = Array.isArray(rule.value) ? rule.value : [undefined, undefined];
-    const targetMode: 'row' | 'cell' | 'columns' = Array.isArray(rule.target) ? 'columns' : rule.target === 'cell' ? 'cell' : 'row';
+    const pair = Array.isArray(condition.value) ? condition.value : [undefined, undefined];
 
     return (
-        <div className='frame flex-column' style={{ gap: 6 }}>
-            <span style={{ fontWeight: 'bold' }}>Modifier la règle</span>
-
+        <>
             <label className='flex-row nowrap' style={{ alignItems: 'center', gap: 6 }}>
                 <span style={{ minWidth: '7em' }}>Colonne</span>
-                <select value={rule.column} onChange={(e) => onChange({ column: e.target.value })} style={{ width: '100%' }}>
+                <select value={condition.column} onChange={(e) => onChange({ column: e.target.value })} style={{ width: '100%' }}>
                     {/* A stored column that no longer exists is kept so editing doesn't silently rewrite it. */}
-                    {!columns.includes(rule.column) && <option value={rule.column}>{rule.column} (inconnue)</option>}
+                    {!columns.includes(condition.column) && <option value={condition.column}>{condition.column} (inconnue)</option>}
                     {columns.map((col) => (
                         <option key={col} value={col}>
                             {col}
@@ -265,8 +256,8 @@ function RuleEditor({
             <label className='flex-row nowrap' style={{ alignItems: 'center', gap: 6 }}>
                 <span style={{ minWidth: '7em' }}>Opérateur</span>
                 <select
-                    value={rule.operator}
-                    onChange={(e) => onChange({ operator: e.target.value as FormattingRule['operator'], value: '' })}
+                    value={condition.operator}
+                    onChange={(e) => onChange({ operator: e.target.value as FormattingCondition['operator'], value: '' })}
                     style={{ width: '100%' }}
                 >
                     {FORMATTING_OPERATORS.map((op) => (
@@ -282,7 +273,7 @@ function RuleEditor({
                     <span style={{ minWidth: '7em' }}>Valeur</span>
                     <input
                         type={inputType}
-                        value={String(rule.value ?? '')}
+                        value={String(condition.value ?? '')}
                         onChange={(e) => onChange({ value: e.target.value })}
                         style={{ width: '100%' }}
                     />
@@ -312,7 +303,7 @@ function RuleEditor({
                     <span style={{ minWidth: '7em' }}>Valeurs</span>
                     <input
                         type='text'
-                        value={Array.isArray(rule.value) ? rule.value.join(', ') : String(rule.value ?? '')}
+                        value={Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value ?? '')}
                         placeholder='séparées par des virgules'
                         onChange={(e) => onChange({ value: e.target.value })}
                         style={{ width: '100%' }}
@@ -323,7 +314,7 @@ function RuleEditor({
             <label className='flex-row nowrap' style={{ alignItems: 'center', gap: 6 }}>
                 <span style={{ minWidth: '7em' }}>Comparer comme</span>
                 <select
-                    value={rule.valueType ?? 'auto'}
+                    value={condition.valueType ?? 'auto'}
                     onChange={(e) => onChange({ valueType: e.target.value as FormattingValueType })}
                     style={{ width: '100%' }}
                 >
@@ -334,6 +325,80 @@ function RuleEditor({
                     <option value='boolean'>Booléen</option>
                 </select>
             </label>
+        </>
+    );
+}
+
+function RuleEditor({
+    rule,
+    columns,
+    hiddenColumns,
+    fieldsType,
+    onChange,
+    onDone,
+}: {
+    rule: FormattingRule;
+    columns: string[];
+    hiddenColumns: Set<string>;
+    fieldsType?: FieldTypeInfo[];
+    onChange: (patch: Partial<FormattingRule>) => void;
+    onDone: () => void;
+}) {
+    const styleState = styleToEditorState(rule.style);
+
+    const setStyle = (patch: Partial<ReturnType<typeof styleToEditorState>>) =>
+        onChange({ style: editorStateToStyle({ ...styleState, ...patch }) });
+
+    const targetMode: 'row' | 'cell' | 'columns' = Array.isArray(rule.target) ? 'columns' : rule.target === 'cell' ? 'cell' : 'row';
+
+    const conditions = rule.conditions ?? [];
+    const updateCondition = (i: number, patch: Partial<FormattingCondition>) =>
+        onChange({ conditions: conditions.map((c, idx) => (idx === i ? { ...c, ...patch } : c)) });
+    const removeCondition = (i: number) => onChange({ conditions: conditions.filter((_, idx) => idx !== i) });
+    const addCondition = () =>
+        onChange({ conditions: [...conditions, { column: columns[0] ?? '', operator: '=', value: '' }] });
+
+    return (
+        <div className='frame flex-column' style={{ gap: 6 }}>
+            <span style={{ fontWeight: 'bold' }}>Modifier la règle</span>
+
+            <ConditionFields condition={rule} columns={columns} hiddenColumns={hiddenColumns} fieldsType={fieldsType} onChange={onChange} />
+
+            {conditions.length > 0 && (
+                <label className='flex-row nowrap' style={{ alignItems: 'center', gap: 6 }}>
+                    <span style={{ minWidth: '7em' }}>Combiner avec</span>
+                    <select
+                        value={rule.conditionLogic ?? 'AND'}
+                        onChange={(e) => onChange({ conditionLogic: e.target.value as 'AND' | 'OR' })}
+                        style={{ width: '100%' }}
+                    >
+                        <option value='AND'>ET (toutes les conditions)</option>
+                        <option value='OR'>OU (au moins une condition)</option>
+                    </select>
+                </label>
+            )}
+
+            {conditions.map((condition, i) => (
+                <div key={i} className='frame flex-column' style={{ gap: 6 }}>
+                    <div className='flex-row nowrap' style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ opacity: 0.7, fontSize: '0.85em' }}>Condition supplémentaire</span>
+                        <button onClick={() => removeCondition(i)} title='Retirer cette condition'>
+                            &#10005;
+                        </button>
+                    </div>
+                    <ConditionFields
+                        condition={condition}
+                        columns={columns}
+                        hiddenColumns={hiddenColumns}
+                        fieldsType={fieldsType}
+                        onChange={(patch) => updateCondition(i, patch)}
+                    />
+                </div>
+            ))}
+
+            <button onClick={addCondition} disabled={columns.length === 0}>
+                + Ajouter une condition
+            </button>
 
             <label className='flex-row nowrap' style={{ alignItems: 'center', gap: 6 }}>
                 <span style={{ minWidth: '7em' }}>Appliquer à</span>
@@ -409,6 +474,17 @@ function RuleEditor({
                     value={rule.className ?? ''}
                     placeholder='optionnel'
                     onChange={(e) => onChange({ className: e.target.value || undefined })}
+                    style={{ width: '100%' }}
+                />
+            </label>
+
+            <label className='flex-row nowrap' style={{ alignItems: 'center', gap: 6 }}>
+                <span style={{ minWidth: '7em' }}>Message (info-bulle)</span>
+                <input
+                    type='text'
+                    value={rule.title ?? ''}
+                    placeholder='Affiché au survol de la ligne/cellule'
+                    onChange={(e) => onChange({ title: e.target.value || undefined })}
                     style={{ width: '100%' }}
                 />
             </label>

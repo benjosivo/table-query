@@ -79,19 +79,29 @@ export interface FormattingStyle {
     style?: CSSProperties;
     /** Class added to the <tr> (target 'row') or to the <td> (target 'cell' | string[]). */
     className?: string;
+    /** HTML `title` (native tooltip) added to the <tr> or <td> when the rule matches. Several matching rules join their titles with a newline. */
+    title?: string;
 }
 
-export interface FormattingRule extends FormattingStyle {
-    /** Stable id, needed by the editor to reorder/disable. Generated when missing. */
-    id?: string;
-    /** Free-form label shown in the editor; a summary is generated when missing. */
-    label?: string;
+/** A single column test: `column op value`. See FormattingRule.conditions for combining several. */
+export interface FormattingCondition {
     /** Name of the tested column (a key of the row objects), not its position. */
     column: string;
     operator: FormattingOperator;
     /** Operand(s): a scalar, [min, max] or {min, max} for 'between', an array for 'in', unused for isNull/isNotNull. */
     value?: unknown;
     valueType?: FormattingValueType;
+}
+
+export interface FormattingRule extends FormattingStyle, FormattingCondition {
+    /** Stable id, needed by the editor to reorder/disable. Generated when missing. */
+    id?: string;
+    /** Free-form label shown in the editor; a summary is generated when missing. */
+    label?: string;
+    /** Extra conditions combined with the primary column/operator/value. Empty/absent = single-condition rule. */
+    conditions?: FormattingCondition[];
+    /** How `conditions` combine with the primary condition. Defaults to 'AND'. */
+    conditionLogic?: 'AND' | 'OR';
     /** Defaults to 'row'. */
     target?: FormattingTarget;
     /** Stop evaluating later rules for the targets this rule wrote to. */
@@ -105,6 +115,7 @@ export interface CellFormatting extends FormattingStyle {}
 export interface RowFormatting {
     rowStyle?: CSSProperties;
     rowClassName?: string;
+    rowTitle?: string;
     /** Keyed by column NAME — never by the positional index of fieldsType/paramFilter. */
     cellStyles: Record<string, CellFormatting>;
 }

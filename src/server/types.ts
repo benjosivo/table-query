@@ -2,22 +2,31 @@ import type { Request, Response } from 'express';
 
 export type ParamFilterType = 'HIDE' | 'SLIDER' | 'DATE' | 'DATETIME' | 'UNGROUP_MULTISELECT' | 'MULTISELECT' | null | 'JSON' | 'FILE';
 
+/** Same shape as the React-side `FormattingCondition` — see `FormattingRuleInput`. */
+export interface FormattingConditionInput {
+    column: string;
+    operator: string;
+    value?: unknown;
+    valueType?: 'auto' | 'string' | 'number' | 'date' | 'boolean';
+}
+
 /**
  * Same shape as the React-side `FormattingRule`, but with no dependency on @types/react:
  * the server only ever forwards these rules, it never evaluates them, and a server-only
  * consumer must not be forced to install React's types to compile.
  */
-export interface FormattingRuleInput {
+export interface FormattingRuleInput extends FormattingConditionInput {
     id?: string;
     label?: string;
-    /** Name of the tested column, matched against the query's own column names. */
-    column: string;
-    operator: string;
-    value?: unknown;
-    valueType?: 'auto' | 'string' | 'number' | 'date' | 'boolean';
+    /** Extra conditions combined with the primary column/operator/value. */
+    conditions?: FormattingConditionInput[];
+    /** How `conditions` combine with the primary condition. Defaults to 'AND'. */
+    conditionLogic?: 'AND' | 'OR';
     target?: 'row' | 'cell' | string[];
     style?: Record<string, string | number>;
     className?: string;
+    /** HTML `title` (native tooltip) shown when the rule matches. */
+    title?: string;
     stopIfTrue?: boolean;
     enabled?: boolean;
 }
