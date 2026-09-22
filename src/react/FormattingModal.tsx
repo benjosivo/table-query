@@ -1,14 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FieldTypeInfo, FormattingCondition, FormattingRule, FormattingTarget, FormattingValueType, ParamFilter } from './types.js';
 import type { UseFormattingRulesResult } from './useFormattingRules.js';
-import {
-    FORMATTING_OPERATORS,
-    describeRule,
-    editorStateToStyle,
-    newRuleId,
-    operatorArity,
-    styleToEditorState,
-} from './formatting.js';
+import { FORMATTING_OPERATORS, describeRule, editorStateToStyle, newRuleId, operatorArity, styleToEditorState } from './formatting.js';
 
 export interface FormattingModalProps extends UseFormattingRulesResult {
     /** Every column of the table, hidden ones included. */
@@ -42,7 +35,7 @@ export function FormattingModal({
     resetUserRules,
 }: FormattingModalProps) {
     const modalRef = useRef<HTMLDivElement>(null);
-    const [style, setStyle] = useState<React.CSSProperties>({ visibility: 'hidden' });
+    const [style, setStyle] = useState<React.CSSProperties>();
     const [editingId, setEditingId] = useState<string | null>(null);
 
     const hiddenColumns = useMemo(() => {
@@ -57,16 +50,16 @@ export function FormattingModal({
     // internal scroll (below) — this modal has more sections than FilterModal and can end up
     // taller than the viewport, which would otherwise push `top` negative and hide the bottom
     // action buttons off-screen.
-    useEffect(() => {
-        if (!anchorEl || !modalRef.current) return;
-        const modalRect = modalRef.current.getBoundingClientRect();
-        const triggerRect = anchorEl.getBoundingClientRect();
-        const margin = 8;
-        const left = Math.max(0, triggerRect.left - modalRect.width + triggerRect.width);
-        const maxTop = window.scrollY + window.innerHeight - modalRect.height - margin;
-        const top = Math.max(window.scrollY + margin, Math.min(maxTop, triggerRect.bottom + 5 + window.scrollY));
-        setStyle({ position: 'absolute', top, left, zIndex: 1000 });
-    }, [anchorEl, editingId, userRules.length, inherited.length]);
+    // useEffect(() => {
+    //     if (!anchorEl || !modalRef.current) return;
+    //     const modalRect = modalRef.current.getBoundingClientRect();
+    //     const triggerRect = anchorEl.getBoundingClientRect();
+    //     const margin = 8;
+    //     const left = Math.max(0, triggerRect.left - modalRect.width + triggerRect.width);
+    //     const maxTop = window.innerHeight - modalRect.height - margin;
+    //     const top = Math.max(margin, triggerRect.bottom);
+    //     setStyle({ position: 'absolute', top, left, zIndex: 1000 });
+    // }, [anchorEl, editingId, userRules.length, inherited.length]);
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -95,99 +88,106 @@ export function FormattingModal({
     };
 
     return (
-        <div
-            ref={modalRef}
-            className='modal flex-column'
-            style={{ minWidth: '22em', maxWidth: '34em', maxHeight: 'calc(100vh - 16px)', overflowY: 'auto', ...style }}
-        >
-            <div className='frame'>
-                <strong>Mise en forme conditionnelle</strong>
-                <span style={{ opacity: 0.7, fontSize: '0.85em' }}>
-                    {rules.length} règle{rules.length > 1 ? 's' : ''} active{rules.length > 1 ? 's' : ''}
-                </span>
-            </div>
-
-            {inherited.length > 0 && (
-                <div className='frame flex-column' style={{ maxHeight: '18vh', overflowY: 'auto' }}>
-                    <span style={{ fontWeight: 'bold' }}>Règles de l'application</span>
-                    {inherited.map((rule) => (
-                        <div key={rule.id} className='flex-row nowrap' style={{ alignItems: 'center', gap: 6, opacity: 0.85 }}>
-                            <input
-                                type='checkbox'
-                                checked={!disabledIds.includes(rule.id!)}
-                                onChange={(e) => setRuleDisabled(rule.id!, !e.target.checked)}
-                                title='Activer / désactiver'
-                            />
-                            <StyleSwatch rule={rule} />
-                            <span style={{ width: '100%' }}>{rule.label || describeRule(rule)}</span>
-                        </div>
-                    ))}
-                    <span style={{ opacity: 0.6, fontSize: '0.8em' }}>Ces règles ne sont pas modifiables ici.</span>
-                </div>
-            )}
-
-            <div className='frame flex-column' style={{ maxHeight: '24vh', overflowY: 'auto' }}>
-                <span style={{ fontWeight: 'bold' }}>Mes règles</span>
-                {userRules.length === 0 && <span style={{ opacity: 0.6 }}>Aucune règle pour l'instant.</span>}
-                {userRules.map((rule, i) => (
-                    <div key={rule.id} className='flex-row nowrap' style={{ alignItems: 'center', gap: 4 }}>
-                        <input
-                            type='checkbox'
-                            checked={rule.enabled !== false}
-                            onChange={(e) => updateRule(rule.id!, { enabled: e.target.checked })}
-                            title='Activer / désactiver'
-                        />
-                        <button onClick={() => moveRule(rule.id!, -1)} disabled={i === 0} title='Monter (priorité plus faible)'>
-                            &#8593;
-                        </button>
-                        <button onClick={() => moveRule(rule.id!, 1)} disabled={i === userRules.length - 1} title='Descendre (priorité plus forte)'>
-                            &#8595;
-                        </button>
-                        <StyleSwatch rule={rule} />
-                        <span style={{ width: '100%', cursor: 'pointer' }} onClick={() => setEditingId(rule.id!)}>
-                            {rule.label || describeRule(rule)}
+        <div className='modal-container'>
+            <div ref={modalRef} className='modal flex-column' style={{ ...style }}>
+                <div className='flex-column nowrap'>
+                    <div className='frame'>
+                        <strong>Mise en forme conditionnelle</strong>
+                        <span style={{ opacity: 0.7, fontSize: '0.85em' }}>
+                            {rules.length} règle{rules.length > 1 ? 's' : ''} active{rules.length > 1 ? 's' : ''}
                         </span>
-                        <button onClick={() => setEditingId(editingId === rule.id ? null : rule.id!)}>Éditer</button>
+                    </div>
+
+                    {inherited.length > 0 && (
+                        <div className='frame flex-column' style={{ maxHeight: 'stretch', overflowY: 'auto' }}>
+                            <span style={{ fontWeight: 'bold' }}>Règles de l'application</span>
+                            {inherited.map((rule) => (
+                                <div key={rule.id} className='flex-row nowrap' style={{ alignItems: 'center', gap: 6, opacity: 0.85 }}>
+                                    <input
+                                        type='checkbox'
+                                        checked={!disabledIds.includes(rule.id!)}
+                                        onChange={(e) => setRuleDisabled(rule.id!, !e.target.checked)}
+                                        title='Activer / désactiver'
+                                    />
+                                    <StyleSwatch rule={rule} />
+                                    <span style={{ width: '100%' }}>{rule.label || describeRule(rule)}</span>
+                                </div>
+                            ))}
+                            <span style={{ opacity: 0.6, fontSize: '0.8em' }}>Ces règles ne sont pas modifiables ici.</span>
+                        </div>
+                    )}
+
+                    <div className='frame flex-column' style={{ maxHeight: 'stretch', overflowY: 'auto' }}>
+                        <span style={{ fontWeight: 'bold' }}>Mes règles</span>
+                        {userRules.length === 0 && <span style={{ opacity: 0.6 }}>Aucune règle pour l'instant.</span>}
+                        {userRules.map((rule, i) => (
+                            <div
+                                key={rule.id}
+                                className='flex-row nowrap'
+                                style={{ alignItems: 'center', gap: 4, backgroundColor: `${editingId === rule.id ? 'var(--clr-hover))' : ''}` }}
+                            >
+                                <input
+                                    type='checkbox'
+                                    checked={rule.enabled !== false}
+                                    onChange={(e) => updateRule(rule.id!, { enabled: e.target.checked })}
+                                    title='Activer / désactiver'
+                                />
+                                <button onClick={() => moveRule(rule.id!, -1)} disabled={i === 0} title='Monter (priorité plus faible)'>
+                                    &#8593;
+                                </button>
+                                <button
+                                    onClick={() => moveRule(rule.id!, 1)}
+                                    disabled={i === userRules.length - 1}
+                                    title='Descendre (priorité plus forte)'
+                                >
+                                    &#8595;
+                                </button>
+                                <StyleSwatch rule={rule} />
+                                <span style={{ width: '100%', cursor: 'pointer' }} onClick={() => setEditingId(rule.id!)}>
+                                    {rule.label || describeRule(rule)}
+                                </span>
+                                <button onClick={() => setEditingId(editingId === rule.id ? null : rule.id!)}>Éditer</button>
+                                <button
+                                    onClick={() => {
+                                        if (editingId === rule.id) setEditingId(null);
+                                        removeRule(rule.id!);
+                                    }}
+                                    title='Supprimer'
+                                >
+                                    &#10005;
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    <div className='flex-row'>
+                        <button className='btn-accent' onClick={startNewRule} disabled={noColumns}>
+                            Ajouter une règle
+                        </button>
                         <button
                             onClick={() => {
-                                if (editingId === rule.id) setEditingId(null);
-                                removeRule(rule.id!);
+                                setEditingId(null);
+                                resetUserRules();
                             }}
-                            title='Supprimer'
+                            disabled={userRules.length === 0 && disabledIds.length === 0}
                         >
-                            &#10005;
+                            Réinitialiser
                         </button>
+                        <button onClick={onClose}>Fermer</button>
                     </div>
-                ))}
-            </div>
+                </div>
+                {editing && (
+                    <RuleEditor
+                        rule={editing}
+                        columns={columns}
+                        hiddenColumns={hiddenColumns}
+                        fieldsType={fieldsType}
+                        onChange={(patch) => updateRule(editing.id!, patch)}
+                        onDone={() => setEditingId(null)}
+                    />
+                )}
 
-            {editing && (
-                <RuleEditor
-                    rule={editing}
-                    columns={columns}
-                    hiddenColumns={hiddenColumns}
-                    fieldsType={fieldsType}
-                    onChange={(patch) => updateRule(editing.id!, patch)}
-                    onDone={() => setEditingId(null)}
-                />
-            )}
-
-            <div className='flex-row'>
-                <button className='btn-accent' onClick={startNewRule} disabled={noColumns}>
-                    Ajouter une règle
-                </button>
-                <button
-                    onClick={() => {
-                        setEditingId(null);
-                        resetUserRules();
-                    }}
-                    disabled={userRules.length === 0 && disabledIds.length === 0}
-                >
-                    Réinitialiser
-                </button>
-                <button onClick={onClose}>Fermer</button>
+                {noColumns && <span style={{ opacity: 0.6 }}>Aucune colonne chargée.</span>}
             </div>
-            {noColumns && <span style={{ opacity: 0.6 }}>Aucune colonne chargée.</span>}
         </div>
     );
 }
@@ -355,8 +355,7 @@ function RuleEditor({
 }) {
     const styleState = styleToEditorState(rule.style);
 
-    const setStyle = (patch: Partial<ReturnType<typeof styleToEditorState>>) =>
-        onChange({ style: editorStateToStyle({ ...styleState, ...patch }) });
+    const setStyle = (patch: Partial<ReturnType<typeof styleToEditorState>>) => onChange({ style: editorStateToStyle({ ...styleState, ...patch }) });
 
     const targetMode: 'row' | 'cell' | 'columns' = Array.isArray(rule.target) ? 'columns' : rule.target === 'cell' ? 'cell' : 'row';
 
@@ -364,8 +363,7 @@ function RuleEditor({
     const updateCondition = (i: number, patch: Partial<FormattingCondition>) =>
         onChange({ conditions: conditions.map((c, idx) => (idx === i ? { ...c, ...patch } : c)) });
     const removeCondition = (i: number) => onChange({ conditions: conditions.filter((_, idx) => idx !== i) });
-    const addCondition = () =>
-        onChange({ conditions: [...conditions, { column: columns[0] ?? '', operator: '=', value: '' }] });
+    const addCondition = () => onChange({ conditions: [...conditions, { column: columns[0] ?? '', operator: '=', value: '' }] });
 
     return (
         <div className='frame flex-column' style={{ gap: 6 }}>
@@ -374,7 +372,7 @@ function RuleEditor({
             <ConditionFields condition={rule} columns={columns} hiddenColumns={hiddenColumns} fieldsType={fieldsType} onChange={onChange} />
 
             {conditions.length > 0 && (
-                <label className='flex-row nowrap' style={{ alignItems: 'center', gap: 6 }}>
+                <label className='flex-row' style={{ alignItems: 'center', gap: 6 }}>
                     <span style={{ minWidth: '7em' }}>Combiner avec</span>
                     <select
                         value={rule.conditionLogic ?? 'AND'}
@@ -426,7 +424,7 @@ function RuleEditor({
             </label>
 
             {targetMode === 'columns' && (
-                <div className='frame flex-column' style={{ maxHeight: '12vh', overflowY: 'auto' }}>
+                <div className='frame flex-column' style={{ maxHeight: 'stretch', overflowY: 'auto' }}>
                     {columns.map((col) => {
                         const list = (rule.target as string[]) ?? [];
                         return (
@@ -449,7 +447,11 @@ function RuleEditor({
             <div className='flex-row nowrap' style={{ alignItems: 'center', gap: 6 }}>
                 <span style={{ minWidth: '7em' }}>Fond</span>
                 {/* type=color has no empty state, so clearing needs its own control. */}
-                <input type='checkbox' checked={!!styleState.background} onChange={(e) => setStyle({ background: e.target.checked ? '#ffe08a' : undefined })} />
+                <input
+                    type='checkbox'
+                    checked={!!styleState.background}
+                    onChange={(e) => setStyle({ background: e.target.checked ? '#ffe08a' : undefined })}
+                />
                 <input
                     type='color'
                     value={styleState.background ?? '#ffe08a'}
@@ -458,7 +460,12 @@ function RuleEditor({
                 />
                 <span style={{ minWidth: '4em' }}>Texte</span>
                 <input type='checkbox' checked={!!styleState.color} onChange={(e) => setStyle({ color: e.target.checked ? '#000000' : undefined })} />
-                <input type='color' value={styleState.color ?? '#000000'} disabled={!styleState.color} onChange={(e) => setStyle({ color: e.target.value })} />
+                <input
+                    type='color'
+                    value={styleState.color ?? '#000000'}
+                    disabled={!styleState.color}
+                    onChange={(e) => setStyle({ color: e.target.value })}
+                />
             </div>
 
             <div className='flex-row nowrap' style={{ alignItems: 'center', gap: 10 }}>
