@@ -165,7 +165,7 @@ export function Table<T extends Record<string, any>>({
                     const cells = visibleColumns.map(({ col, index }) => {
                         const cf = fmt?.cellStyles[col];
                         return (
-                            <td key={col} className={cf?.className} style={cf?.style}>
+                            <td key={col} className={cf?.className} style={cf?.style} title={cf?.title}>
                                 <Cell value={row[col]} fieldType={fieldsType[index]?.fieldType} onImagePreview={onImagePreview} />
                             </td>
                         );
@@ -184,6 +184,7 @@ export function Table<T extends Record<string, any>>({
                             key={id !== undefined ? String(id) : i}
                             className={fmt?.rowClassName}
                             style={{ cursor: onRowClick ? 'pointer' : 'default', ...fmt?.rowStyle }}
+                            title={fmt?.rowTitle}
                             onClick={() => id !== undefined && onRowClick?.(id, row)}
                         >
                             {withSelectionCell(cells, selectionCell)}

@@ -93,7 +93,11 @@ export function createTableQueryModule(deps: TableQueryDeps) {
         // setFilter, so the client needs no extra round-trip.
         if (formattingRules?.length) {
             const names = new Set((payload.fieldsType ?? []).map((f: any) => f.fieldName));
-            const kept = formattingRules.filter((r) => r && typeof r.column === 'string' && names.has(r.column));
+            const kept = formattingRules.filter((r) => {
+                if (!r || typeof r.column !== 'string' || !names.has(r.column)) return false;
+                if (Array.isArray(r.conditions) && r.conditions.some((c) => !c || typeof c.column !== 'string' || !names.has(c.column))) return false;
+                return true;
+            });
             const dropped = formattingRules.length - kept.length;
             // A bad column name is a presentation mistake: warn, don't take the table down.
             if (dropped) console.warn(`[table-query] ${dropped} règle(s) de mise en forme ignorée(s) : colonne inconnue.`);

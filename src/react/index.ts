@@ -30,6 +30,7 @@ export type {
     CellFormatting,
     FilterConfig,
     FilterFieldConfig,
+    FormattingCondition,
     FormattingOperator,
     FormattingRule,
     FormattingRuleSource,
