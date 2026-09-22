@@ -53,13 +53,18 @@ export function FormattingModal({
         return set;
     }, [columns, paramFilter]);
 
-    // Same anchoring maths as FilterModal.
+    // Same anchoring maths as FilterModal, but also clamped to a minimum `top` and given an
+    // internal scroll (below) — this modal has more sections than FilterModal and can end up
+    // taller than the viewport, which would otherwise push `top` negative and hide the bottom
+    // action buttons off-screen.
     useEffect(() => {
         if (!anchorEl || !modalRef.current) return;
         const modalRect = modalRef.current.getBoundingClientRect();
         const triggerRect = anchorEl.getBoundingClientRect();
+        const margin = 8;
         const left = Math.max(0, triggerRect.left - modalRect.width + triggerRect.width);
-        const top = Math.min(window.scrollY + window.innerHeight - modalRect.height, triggerRect.bottom + 5 + window.scrollY);
+        const maxTop = window.scrollY + window.innerHeight - modalRect.height - margin;
+        const top = Math.max(window.scrollY + margin, Math.min(maxTop, triggerRect.bottom + 5 + window.scrollY));
         setStyle({ position: 'absolute', top, left, zIndex: 1000 });
     }, [anchorEl, editingId, userRules.length, inherited.length]);
 
@@ -90,7 +95,11 @@ export function FormattingModal({
     };
 
     return (
-        <div ref={modalRef} className='modal flex-column' style={{ minWidth: '22em', maxWidth: '34em', ...style }}>
+        <div
+            ref={modalRef}
+            className='modal flex-column'
+            style={{ minWidth: '22em', maxWidth: '34em', maxHeight: 'calc(100vh - 16px)', overflowY: 'auto', ...style }}
+        >
             <div className='frame'>
                 <strong>Mise en forme conditionnelle</strong>
                 <span style={{ opacity: 0.7, fontSize: '0.85em' }}>
