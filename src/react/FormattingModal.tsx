@@ -159,7 +159,7 @@ export function FormattingModal({
                             </div>
                         ))}
                     </div>
-                    <div className='flex-row'>
+                    <div className='flex-row' style={{ justifyContent: 'space-between' }}>
                         <button className='btn-accent' onClick={startNewRule} disabled={noColumns}>
                             Ajouter une règle
                         </button>
