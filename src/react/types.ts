@@ -171,3 +171,39 @@ export interface DataTableProps<T extends Record<string, any>> {
     /** Label of the toolbar button. Default 'Mise en forme'. */
     formattingButtonLabel?: string;
 }
+
+export interface useDataResult<T extends Record<string, any>> {
+    items: T[];
+    count: number;
+    fieldsType: FieldTypeInfo[];
+    paramFilter: ParamFilter[];
+    loading: boolean;
+    page: number;
+    perPage: number;
+    rowsPerPageOptions: number[];
+    totalPages: number;
+    sortColumn: string;
+    sortDirection: SortDirection;
+    filters: Record<string, unknown>;
+    filterConfig: FilterConfig | null;
+    serverFormattingRules: FormattingRule[];
+    selectedIds: any[];
+    selectedRows: T[];
+    isRowSelected: (row: T) => boolean;
+    toggleRowSelection: (row: T) => void;
+    setRowSelected: (row: T, selected: boolean) => void;
+    setAllRowsSelected: (selected: boolean) => void;
+    clearSelection: () => void;
+    toggleSort: (column: string, forceDirection?: SortDirection) => void;
+    setColumnFilter: (key: string, value: unknown) => void;
+    replaceFilters: (next: Record<string, unknown>) => void;
+    clearFilter: (key: string) => void;
+    clearAllFilters: () => void;
+    changePerPage: (n: number) => void;
+    goToPage: (p: number) => Promise<void>;
+    nextPage: () => Promise<void>;
+    previousPage: () => Promise<void>;
+    firstPage: () => Promise<void>;
+    lastPage: () => Promise<void>;
+    refresh: () => Promise<void>;
+}
