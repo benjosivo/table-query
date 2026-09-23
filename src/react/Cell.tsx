@@ -9,7 +9,7 @@ interface CellProps {
 }
 
 export function Cell({ value, fieldType, onImagePreview }: CellProps) {
-    fieldType = fieldType.trim();
+    fieldType = (fieldType ?? '').trim().toUpperCase();
     if (fieldType === 'DATE') return <>{formattedDate(value, true)}</>;
     if (fieldType === 'DATETIME' || fieldType === 'TIMESTAMP') return <>{formattedDate(value)}</>;
     if (fieldType === 'JSON' && value) return <span dangerouslySetInnerHTML={{ __html: truncatedJSON(value) }} />;
