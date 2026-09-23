@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { type CSSProperties } from 'react';
 
 export type ParamFilterType = 'HIDE' | 'SLIDER' | 'DATE' | 'DATETIME' | 'UNGROUP_MULTISELECT' | 'MULTISELECT' | null | 'JSON' | 'FILE';
 
@@ -23,7 +24,7 @@ export interface FormattingRuleInput extends FormattingConditionInput {
     /** How `conditions` combine with the primary condition. Defaults to 'AND'. */
     conditionLogic?: 'AND' | 'OR';
     target?: 'row' | 'cell' | string[];
-    style?: Record<string, string | number>;
+    style?: CSSProperties;
     className?: string;
     /** HTML `title` (native tooltip) shown when the rule matches. */
     title?: string;
