@@ -43,4 +43,5 @@ export type {
     RowFormatting,
     SelectionColumnPosition,
     SortDirection,
+    useDataResult,
 } from './types.js';

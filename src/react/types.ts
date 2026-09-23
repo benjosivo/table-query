@@ -172,7 +172,7 @@ export interface DataTableProps<T extends Record<string, any>> {
     formattingButtonLabel?: string;
 }
 
-export interface useDataResult<T extends Record<string, any>> {
+export type useDataResult<T extends Record<string, any>> = {
     items: T[];
     count: number;
     fieldsType: FieldTypeInfo[];
@@ -206,4 +206,4 @@ export interface useDataResult<T extends Record<string, any>> {
     firstPage: () => Promise<void>;
     lastPage: () => Promise<void>;
     refresh: () => Promise<void>;
-}
+};
