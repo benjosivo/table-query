@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DataTableProps, FetchResult, FieldTypeInfo, FilterConfig, FormattingRule, SortDirection, ParamFilter, useDataResult } from './types.js';
+import type { DataTableProps, FetchResult, FieldTypeInfo, FilterConfig, FormattingRule, SortDirection, ParamFilter, UseDataTableResult } from './types.js';
 import { sanitizeFormattingRules } from './formatting.js';
 import { getRowId, selectionKey } from './utils.js';
 
@@ -22,7 +22,7 @@ export function useDataTable<T extends Record<string, any>>({
     | 'selectedIds'
     | 'onSelectionChange'
     | 'defaultFilters'
->) : useDataResult<T> {
+>) : UseDataTableResult<T> {
     const [items, setItems] = useState<T[]>([]);
     const [count, setCount] = useState(0);
     const [fieldsType, setFieldsType] = useState<FieldTypeInfo[]>([]);

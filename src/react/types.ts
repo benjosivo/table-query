@@ -172,7 +172,7 @@ export interface DataTableProps<T extends Record<string, any>> {
     formattingButtonLabel?: string;
 }
 
-export type useDataResult<T extends Record<string, any>> = {
+export type UseDataTableResult<T extends Record<string, any>> = {
     items: T[];
     count: number;
     fieldsType: FieldTypeInfo[];
